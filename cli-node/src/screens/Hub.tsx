@@ -1,0 +1,858 @@
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import React, { useEffect, useMemo, useState } from "react";
+import { Box, Text, useInput, useStdout } from "ink";
+import TextInput from "ink-text-input";
+import { load, rekeyRuntime, remove, type Session } from "../history";
+import {
+  HARNESS_ORDER,
+  loadNativeSessions,
+  loadNativeTotals,
+  scanHarness,
+  type Harness,
+  type NativeSession,
+} from "../native/index";
+import { cycleRuntime } from "../runtimes";
+import {
+  HARNESS_LABEL,
+  convoDisplay,
+  convoExpandLabel,
+  matchConvo,
+  matchSession,
+  moveIndex,
+  sessionDisplay,
+  sessionRows,
+  windowSlice,
+} from "../rows";
+import { ago, shorten } from "../util";
+import { RUNTIME_COLOR, RUNTIME_ICON, TMUX_MARK, theme } from "../theme";
+import {
+  TMUX_PREFIX,
+  hasSession,
+  killSession,
+  listAtlasSessions,
+  listTmuxPanes,
+  matchAtlasSession,
+  tmuxBaseName,
+  type TmuxPane,
+  type TmuxSession,
+} from "../tmux";
+import {
+  DEFAULT_COLS,
+  Dim,
+  HeaderRow,
+  HintBar,
+  ItemRow,
+  StatusLine,
+  hintsWidth,
+  Title,
+  listHeightFor,
+} from "../components/chrome";
+import { useLiveIndex } from "../components/useLiveIndex";
+import { useSpinner } from "../components/useSpinner";
+import {
+  pidsForKey,
+  pidsForResume,
+  runningKeys,
+  runningResumeIds,
+  runtimeForCommand,
+  terminatePids,
+} from "../process";
+import type { Choice } from "../App";
+import type { RunningTarget } from "./Running";
+
+export const RECENT_LIMIT = 10;
+
+/** Left-column width that fits the full filter hint (57 chars + "/ "). */
+export const FULL_HINT_MIN_LEFT = 59;
+
+/** Hint sets: the full list-mode set, its narrow essential subset, and the
+ *  short filter-mode set (always fits). HINTS_FULL_MIN_COLS tracks the full
+ *  set's rendered width + 4 root padding so the bar never wraps. */
+export const HINTS_FULL: Array<[string, string]> = [
+  ["Enter", "abrir"],
+  ["n", "nova"],
+  ["r", "runtime"],
+  ["d", "remover"],
+  ["X", "matar"],
+  ["/", "filtrar"],
+  ["q", "sair"],
+];
+export const HINTS_SHORT: Array<[string, string]> = [
+  ["Enter", "abrir"],
+  ["n", "nova"],
+  ["/", "filtrar"],
+  ["q", "sair"],
+];
+export const HINTS_FILTER: Array<[string, string]> = [
+  ["↑↓", "navegar"],
+  ["Enter", "abrir"],
+  ["esc", "lista"],
+];
+export const HINTS_FULL_MIN_COLS = hintsWidth(HINTS_FULL) + 4;
+
+type HubRow =
+  | { t: "toggleRecents" }
+  | { t: "toggleConvos" }
+  | { t: "header"; label: string }
+  | { t: "session"; session: Session }
+  | { t: "convo"; convo: NativeSession }
+  | { t: "expandConvo"; harness: Harness; mode: "more" | "less" | "loading"; total: number }
+  | { t: "tmux"; name: string; runtime: string; dir: string }
+  | { t: "domain"; domain: string; repos: number };
+
+interface Props {
+  domains: Array<{ domain: string; repos: number }>;
+  onOpen: (c: Choice) => void;
+  onViewRunning: (t: RunningTarget) => void;
+  onNewSession: () => void;
+  onDrill: (domain: string) => void;
+  onQuit: () => void;
+}
+
+function SessionContent({
+  s,
+  hot,
+  running,
+  spin,
+  tmux,
+}: {
+  s: Session;
+  hot: boolean;
+  running: boolean;
+  spin: string;
+  tmux: boolean;
+}) {
+  const fg = hot ? theme.highlightFg : theme.text;
+  const icon = RUNTIME_ICON[s.runtime] ?? "•";
+  const iconColor = hot ? theme.highlightFg : (RUNTIME_COLOR[s.runtime] ?? theme.text);
+  const missing = existsSync(s.dir) ? "" : " ⚠";
+  return (
+    <Text>
+      {running ? (
+        <Text color={hot ? theme.highlightFg : theme.live}>{`${spin} `}</Text>
+      ) : (
+        <Text>{`  `}</Text>
+      )}
+      {tmux && <Text color={hot ? theme.highlightFg : theme.peach}>{`${TMUX_MARK} `}</Text>}
+      <Text color={iconColor}>{`${icon} `}</Text>
+      <Text color={fg}>{`${s.runtime.padEnd(6)} ${sessionDisplay(s)}  `}</Text>
+      {hot ? (
+        <Text color="#3A2A1A">{`· ${ago(s.last_used)} · ${s.uses}x${missing}`}</Text>
+      ) : (
+        <Text dimColor>{`· ${ago(s.last_used)} · ${s.uses}x${missing}`}</Text>
+      )}
+    </Text>
+  );
+}
+
+function ConvoContent({
+  c,
+  hot,
+  live,
+  spin,
+  tmux,
+}: {
+  c: NativeSession;
+  hot: boolean;
+  live: boolean;
+  spin: string;
+  tmux: boolean;
+}) {
+  const fg = hot ? theme.highlightFg : theme.text;
+  const icon = RUNTIME_ICON[c.harness] ?? "•";
+  const iconColor = hot ? theme.highlightFg : (RUNTIME_COLOR[c.harness] ?? theme.text);
+  const preview = c.preview ? `  “${c.preview.slice(0, 48)}”` : `  · ${c.id.slice(0, 8)}`;
+  return (
+    <Text>
+      {live ? (
+        <Text color={hot ? theme.highlightFg : theme.live}>{`${spin} `}</Text>
+      ) : (
+        <Text>{`  `}</Text>
+      )}
+      {tmux && <Text color={hot ? theme.highlightFg : theme.peach}>{`${TMUX_MARK} `}</Text>}
+      <Text color={iconColor}>{`${icon} `}</Text>
+      <Text color={fg}>{convoDisplay(c)}</Text>
+      {hot ? (
+        <Text color="#3A2A1A">{`${preview}  · ${ago(new Date(c.updatedAt).toISOString())}`}</Text>
+      ) : (
+        <Text dimColor>{`${preview}  · ${ago(new Date(c.updatedAt).toISOString())}`}</Text>
+      )}
+    </Text>
+  );
+}
+
+function TmuxContent({
+  name,
+  runtime,
+  dir,
+  hot,
+  spin,
+}: {
+  name: string;
+  runtime: string;
+  dir: string;
+  hot: boolean;
+  spin: string;
+}) {
+  const fg = hot ? theme.highlightFg : theme.text;
+  const icon = RUNTIME_ICON[runtime] ?? "•";
+  const iconColor = hot ? theme.highlightFg : (RUNTIME_COLOR[runtime] ?? theme.text);
+  return (
+    <Text>
+      <Text color={hot ? theme.highlightFg : theme.live}>{`${spin} `}</Text>
+      <Text color={hot ? theme.highlightFg : theme.peach}>{`${TMUX_MARK} `}</Text>
+      <Text color={iconColor}>{`${icon} `}</Text>
+      <Text color={fg}>{`${runtime.padEnd(6)} ${name}  `}</Text>
+      {hot ? (
+        <Text color="#3A2A1A">{`· ${shorten(dir)}`}</Text>
+      ) : (
+        <Text dimColor>{`· ${shorten(dir)}`}</Text>
+      )}
+    </Text>
+  );
+}
+
+function sameSet(a: Set<string>, b: Set<string>): boolean {
+  return a.size === b.size && [...a].every((k) => b.has(k));
+}
+
+function samePanes(a: TmuxPane[], b: TmuxPane[]): boolean {
+  return (
+    a.length === b.length &&
+    a.every((p, i) => p.session === b[i].session && p.command === b[i].command && p.path === b[i].path)
+  );
+}
+
+function sameTmux(a: Map<string, TmuxSession>, b: Map<string, TmuxSession>): boolean {
+  return (
+    a.size === b.size &&
+    [...a].every(([k, s]) => b.get(k)?.attached === s.attached)
+  );
+}
+
+export default function Hub({
+  domains,
+  onOpen,
+  onViewRunning,
+  onNewSession,
+  onDrill,
+  onQuit,
+}: Props) {
+  const [sessions, setSessions] = useState<Session[]>(() => load());
+  const [convos] = useState<NativeSession[]>(() => loadNativeSessions());
+  const [fullHarness, setFullHarness] = useState<Record<Harness, NativeSession[] | null>>(() => ({
+    claude: null,
+    codex: null,
+    muse: null,
+  }));
+  const [totals] = useState<Record<Harness, number>>(() => loadNativeTotals());
+  const [expandedHarness, setExpandedHarness] = useState<Record<Harness, boolean>>(() => ({
+    claude: false,
+    codex: false,
+    muse: false,
+  }));
+  const [loadingHarness, setLoadingHarness] = useState<Record<Harness, boolean>>(() => ({
+    claude: false,
+    codex: false,
+    muse: false,
+  }));
+  // live agents: snapshot at mount, then refresh so sessions started or
+  // stopped while browsing pin/unpin without reopening (cheap /proc scan
+  // plus one `tmux ls` for Atlas-managed sessions in any terminal)
+  const [running, setRunning] = useState(() => runningKeys());
+  const [liveResumes, setLiveResumes] = useState(() => runningResumeIds());
+  const [tmuxSessions, setTmuxSessions] = useState(() => listAtlasSessions());
+  const [tmuxPanes, setTmuxPanes] = useState(() => listTmuxPanes());
+  useEffect(() => {
+    const t = setInterval(() => {
+      const nextRunning = runningKeys();
+      setRunning((prev) => (sameSet(nextRunning, prev) ? prev : nextRunning));
+      const nextResumes = runningResumeIds();
+      setLiveResumes((prev) => (sameSet(nextResumes, prev) ? prev : nextResumes));
+      const nextTmux = listAtlasSessions();
+      setTmuxSessions((prev) => (sameTmux(nextTmux, prev) ? prev : nextTmux));
+      const nextPanes = listTmuxPanes();
+      setTmuxPanes((prev) => (samePanes(nextPanes, prev) ? prev : nextPanes));
+    }, 2000);
+    return () => clearInterval(t);
+  }, []);
+  const tmuxForSession = (s: Session): string | null =>
+    matchAtlasSession(tmuxSessions, tmuxBaseName(s.dir, s.runtime));
+  const tmuxForConvo = (c: NativeSession): string | null =>
+    matchAtlasSession(tmuxSessions, tmuxBaseName(c.dir ?? homedir(), c.harness, c.id));
+  // recents open on their own when one of them is actually running
+  const [expandedRecents, setExpandedRecents] = useState(() =>
+    sessions.some(
+      (s) => running.has(`${s.dir}\0${s.runtime}`) || tmuxForSession(s) !== null,
+    ),
+  );
+  const [expandedConvos, setExpandedConvos] = useState(() =>
+    convos.some((c) => liveResumes.has(c.id) || tmuxForConvo(c) !== null),
+  );
+  const [query, setQuery] = useState("");
+  const [focus, setFocus] = useState<"list" | "filter">("list");
+  const [index, indexRef, setIndex] = useLiveIndex(0);
+  const [msg, setMsg] = useState("");
+  /** Row key armed by the first X (second X on the same row kills). */
+  const [armedKill, setArmedKill] = useState<string | null>(null);
+  const [killing, setKilling] = useState(false);
+  const { stdout } = useStdout();
+  const spin = useSpinner(running.size > 0 || liveResumes.size > 0 || tmuxSessions.size > 0);
+  const isRunning = (s: Session): boolean =>
+    running.has(`${s.dir}\0${s.runtime}`) || tmuxForSession(s) !== null;
+  const isConvoLive = (c: NativeSession): boolean =>
+    liveResumes.has(c.id) || tmuxForConvo(c) !== null;
+
+  /** Stable identity for arming X: indexes shift when live rows pin/unpin. */
+  const rowKey = (row: HubRow): string | null => {
+    if (row.t === "session") return `s:${row.session.dir}\0${row.session.runtime}`;
+    if (row.t === "convo") return `c:${row.convo.harness}:${row.convo.id}`;
+    if (row.t === "tmux") return `t:${row.name}`;
+    return null;
+  };
+
+  interface Killable {
+    tmux: string | null;
+    procs: number[];
+    label: string;
+  }
+
+  const killableFor = (row: HubRow): Killable | null => {
+    if (row.t === "session") {
+      const s = row.session;
+      return {
+        tmux: tmuxForSession(s),
+        procs: pidsForKey(s.dir, s.runtime),
+        label: `${s.runtime} ${sessionDisplay(s)}`,
+      };
+    }
+    if (row.t === "convo") {
+      const c = row.convo;
+      return {
+        tmux: tmuxForConvo(c),
+        procs: pidsForResume(c.id),
+        label: `${c.harness} ${convoDisplay(c)}`,
+      };
+    }
+    if (row.t === "tmux") {
+      return { tmux: row.name, procs: [], label: row.name };
+    }
+    return null;
+  };
+
+  const refreshLive = (): void => {
+    setRunning(runningKeys());
+    setLiveResumes(runningResumeIds());
+    setTmuxSessions(listAtlasSessions());
+    setTmuxPanes(listTmuxPanes());
+  };
+
+  /** Kill what a row points at (tmux session wins over bare processes),
+   *  re-resolving everything fresh so a death mid-flight reads as done. */
+  const killRow = async (row: HubRow): Promise<void> => {
+    const info = killableFor(row);
+    if (!info) return;
+    if (info.tmux) {
+      setMsg("encerrando sessão tmux…");
+      if (!hasSession(info.tmux)) {
+        refreshLive();
+        setMsg("a sessão tmux já tinha encerrado.");
+        return;
+      }
+      if (killSession(info.tmux) && !hasSession(info.tmux)) {
+        refreshLive();
+        setMsg(`sessão tmux '${info.tmux}' encerrada.`);
+      } else {
+        refreshLive();
+        setMsg(`não consegui encerrar a sessão tmux '${info.tmux}'.`);
+      }
+      return;
+    }
+    if (info.procs.length === 0) {
+      refreshLive();
+      setMsg("o processo já tinha encerrado.");
+      return;
+    }
+    setMsg("encerrando…");
+    const result = await terminatePids(info.procs);
+    refreshLive();
+    if (result.alive.length === 0) setMsg(`encerrado: ${info.label}.`);
+    else setMsg(`não consegui encerrar o PID ${result.alive.join(", ")} — sem permissão?`);
+  };
+
+  const filtering = query.trim().length > 0;
+  const showRecents = expandedRecents || filtering;
+  const showConvos = expandedConvos || filtering;
+
+  /** Effective convos: full history once loaded per harness, else the initial parse. */
+  const effectiveConvos = useMemo(() => {
+    const out: NativeSession[] = [];
+    for (const h of ["claude", "codex", "muse"] as const) {
+      if (fullHarness[h]) out.push(...fullHarness[h]);
+      else out.push(...convos.filter((c) => c.harness === h));
+    }
+    return out;
+  }, [convos, fullHarness]);
+
+  /** tmux sessions already shown through a history/convo row (no duplicates). */
+  const representedTmux = useMemo(() => {
+    const out = new Set<string>();
+    for (const s of sessions) {
+      const t = tmuxForSession(s);
+      if (t) out.add(t);
+    }
+    for (const c of effectiveConvos) {
+      const t = tmuxForConvo(c);
+      if (t) out.add(t);
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessions, effectiveConvos, tmuxSessions]);
+
+  interface StrayTmux {
+    name: string;
+    runtime: string;
+    dir: string;
+  }
+
+  /** Live tmux sessions Atlas does not otherwise show: everything in the
+   *  Atlas namespace (orphans included) plus foreign sessions with an agent
+   *  runtime in a pane. Idle foreign shells stay out of the way. */
+  const strays: StrayTmux[] = useMemo(() => {
+    const panesBySession = new Map<string, TmuxPane[]>();
+    for (const p of tmuxPanes) {
+      const list = panesBySession.get(p.session) ?? [];
+      list.push(p);
+      panesBySession.set(p.session, list);
+    }
+    const out: StrayTmux[] = [];
+    for (const [name, panes] of panesBySession) {
+      if (representedTmux.has(name)) continue;
+      const owned = name.startsWith(TMUX_PREFIX);
+      let runtime = "";
+      let dir = panes[0]?.path ?? "";
+      for (const p of panes) {
+        const r = runtimeForCommand(p.command);
+        if (r) {
+          runtime = r;
+          dir = p.path;
+          break;
+        }
+      }
+      if (!owned && !runtime) continue;
+      out.push({ name, runtime: runtime || "shell", dir });
+    }
+    out.sort(
+      (a, b) =>
+        Number(a.runtime === "shell") - Number(b.runtime === "shell") || (a.name < b.name ? -1 : 1),
+    );
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tmuxPanes, tmuxSessions, representedTmux]);
+
+  const rows: HubRow[] = useMemo(() => {
+    const out: HubRow[] = [{ t: "toggleRecents" }];
+    if (showRecents) {
+      const visible = sessions.filter((s) => matchSession(s, query));
+      // live sessions pin to the top (stable: keeps recency order inside groups)
+      const pinned = visible
+        .map((s, i) => ({ s, i }))
+        .sort(
+          (a, b) =>
+            Number(!isRunning(a.s)) - Number(!isRunning(b.s)) || a.i - b.i,
+        )
+        .map((x) => x.s);
+      const capped = filtering ? pinned : pinned.slice(0, RECENT_LIMIT);
+      // pass isRunning: grouping re-sorts, so pinning must apply inside sessionRows too
+      const parts = sessionRows(capped, isRunning);
+      if (parts.length === 0) {
+        out.push({
+          t: "header",
+          label: filtering ? `— nada combina com “${query.trim()}” —` : "— nenhuma sessão ainda · n cria —",
+        });
+      }
+      for (const p of parts) {
+        if (p.t === "header") out.push({ t: "header", label: p.label });
+        else out.push({ t: "session", session: p.session });
+      }
+    }
+    out.push({ t: "toggleConvos" });
+    if (showConvos) {
+      const matching = effectiveConvos.filter((c) => matchConvo(c, query));
+      if (matching.length === 0) {
+        out.push({
+          t: "header",
+          label: filtering
+            ? `— nada combina com “${query.trim()}” —`
+            : "— nenhuma conversa encontrada nos harnesses —",
+        });
+      }
+      for (const h of HARNESS_ORDER) {
+        const items = matching
+          .filter((c) => c.harness === h)
+          .sort((a, b) => b.updatedAt - a.updatedAt);
+        if (items.length === 0) continue;
+        const total = totals[h];
+        const open = filtering || expandedHarness[h];
+        const shown = open ? items : items.slice(0, 12);
+        const count = total > shown.length ? `${shown.length} de ${total}` : `${total}`;
+        out.push({
+          t: "header",
+          label: `${RUNTIME_ICON[h]} ${HARNESS_LABEL[h]}  ·  ${count}`,
+        });
+        for (const c of shown) out.push({ t: "convo", convo: c });
+        if (!filtering && total > shown.length) {
+          out.push({
+            t: "expandConvo",
+            harness: h,
+            mode: loadingHarness[h] ? "loading" : "more",
+            total,
+          });
+        } else if (!filtering && expandedHarness[h] && total > 12) {
+          out.push({ t: "expandConvo", harness: h, mode: "less", total });
+        }
+      }
+    }
+    const matchingStrays = filtering
+      ? strays.filter((s) => {
+          const hay = `${s.runtime} ${s.name} ${s.dir}`.toLowerCase();
+          return query
+            .trim()
+            .toLowerCase()
+            .split(/\s+/)
+            .every((w) => hay.includes(w));
+        })
+      : strays;
+    if (matchingStrays.length > 0) {
+      const n = matchingStrays.length;
+      out.push({ t: "header", label: `◈ sessões tmux  ·  ${n} ${n === 1 ? "sessão" : "sessões"}` });
+      for (const s of matchingStrays) out.push({ t: "tmux", name: s.name, runtime: s.runtime, dir: s.dir });
+    }
+    for (const d of domains) out.push({ t: "domain", domain: d.domain, repos: d.repos });
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessions, effectiveConvos, totals, expandedHarness, loadingHarness, query, filtering, showRecents, showConvos, domains, running, tmuxSessions, strays]);
+
+  useEffect(() => {
+    setIndex((prev) => {
+      if (prev !== null && rows[prev] && rows[prev].t !== "header") return prev;
+      const first = rows.findIndex((r) => r.t !== "header");
+      return first === -1 ? null : first;
+    });
+  }, [rows]);
+
+  const toggleRecentsLabel = (): string => {
+    const total = sessions.length;
+    if (!showRecents) return total === 0 ? "▸ Recentes · nenhuma" : `▸ Recentes · ${total}`;
+    if (filtering) {
+      const n = sessions.filter((s) => matchSession(s, query)).length;
+      return `▾ Recentes · ${n} ${n === 1 ? "resultado" : "resultados"}`;
+    }
+    return total <= RECENT_LIMIT ? `▾ Recentes · ${total}` : `▾ Recentes · ${RECENT_LIMIT} de ${total}`;
+  };
+
+  const toggleConvosLabel = (): string => {
+    const total = totals.claude + totals.codex + totals.muse;
+    if (!showConvos) return total === 0 ? "▸ Conversas · nenhuma" : `▸ Conversas · ${total}`;
+    if (filtering) {
+      const n = convos.filter((c) => matchConvo(c, query)).length;
+      return `▾ Conversas · ${n} ${n === 1 ? "resultado" : "resultados"}`;
+    }
+    return `▾ Conversas · ${total}`;
+  };
+
+  const activate = (at: number | null) => {
+    if (at === null) return;
+    const row = rows[at];
+    if (!row || row.t === "header") return;
+    if (row.t === "toggleRecents") {
+      setExpandedRecents((e) => !e);
+      return;
+    }
+    if (row.t === "toggleConvos") {
+      setExpandedConvos((e) => !e);
+      return;
+    }
+    if (row.t === "expandConvo") {
+      const h = row.harness;
+      if (row.mode === "loading") return;
+      if (expandedHarness[h]) {
+        // collapse display only: loaded data stays for the filter
+        setExpandedHarness((prev) => ({ ...prev, [h]: false }));
+        return;
+      }
+      setLoadingHarness((prev) => ({ ...prev, [h]: true }));
+      // async so the "carregando…" row paints before the (sync) full scan runs
+      setTimeout(() => {
+        const items = scanHarness(h, Infinity).sort((a, b) => b.updatedAt - a.updatedAt);
+        setFullHarness((prev) => ({ ...prev, [h]: items }));
+        setExpandedHarness((prev) => ({ ...prev, [h]: true }));
+        setLoadingHarness((prev) => ({ ...prev, [h]: false }));
+      }, 30);
+      return;
+    }
+    if (row.t === "domain") {
+      onDrill(row.domain);
+      return;
+    }
+    if (row.t === "convo") {
+      const c = row.convo;
+      const t = tmuxForConvo(c);
+      if (t) {
+        onViewRunning({ kind: "convo", convo: c, tmux: t });
+        return;
+      }
+      if (liveResumes.has(c.id)) {
+        onViewRunning({ kind: "convo", convo: c });
+        return;
+      }
+      onOpen({ dir: c.dir ?? homedir(), runtime: c.harness, resume: c.id });
+      return;
+    }
+    if (row.t === "tmux") {
+      // unmanaged session: coordinates for viewing/attaching, never recorded
+      onViewRunning({
+        kind: "session",
+        session: { dir: row.dir, runtime: row.runtime, last_used: new Date().toISOString(), uses: 1 },
+        tmux: row.name,
+      });
+      return;
+    }
+    const s = row.session;
+    if (!existsSync(s.dir)) {
+      setMsg(`Diretório não existe mais: ${s.dir}`);
+      return;
+    }
+    const t = tmuxForSession(s);
+    if (t) {
+      onViewRunning({ kind: "session", session: s, tmux: t });
+      return;
+    }
+    if (running.has(`${s.dir}\0${s.runtime}`)) {
+      onViewRunning({ kind: "session", session: s });
+      return;
+    }
+    onOpen({ dir: s.dir, runtime: s.runtime });
+  };
+
+  /** Which collapsible section contains the highlight (for ←). */
+  const sectionOf = (at: number | null): "recents" | "convos" | null => {
+    if (at === null) return null;
+    for (let i = at; i >= 0; i--) {
+      if (rows[i].t === "toggleRecents") return "recents";
+      if (rows[i].t === "toggleConvos") return "convos";
+    }
+    return null;
+  };
+
+  useInput((input, key) => {
+    if (key.ctrl && input === "c") {
+      onQuit();
+      return;
+    }
+    if (focus === "filter") {
+      if (key.upArrow || key.downArrow) {
+        setIndex((prev) => moveIndex(rows, prev ?? 0, key.upArrow ? -1 : 1));
+      } else if (key.escape) {
+        setQuery("");
+        setFocus("list");
+      }
+      return;
+    }
+    if (key.upArrow || key.downArrow) {
+      setMsg("");
+      setIndex((prev) => moveIndex(rows, prev ?? 0, key.upArrow ? -1 : 1));
+    }
+    else if (key.leftArrow) {
+      const section = sectionOf(indexRef.current);
+      if (section === "recents") setExpandedRecents(false);
+      else if (section === "convos") setExpandedConvos(false);
+    } else if (key.rightArrow) {
+      const at = indexRef.current !== null ? rows[indexRef.current] : undefined;
+      if (at?.t === "toggleRecents") setExpandedRecents(true);
+      else if (at?.t === "toggleConvos") setExpandedConvos(true);
+    } else if (key.return) activate(indexRef.current);
+    else if (key.escape) {
+      if (filtering) setQuery("");
+      else if (expandedRecents) setExpandedRecents(false);
+      else if (expandedConvos) setExpandedConvos(false);
+    } else if (input === "n") onNewSession();
+    else if (input === "q") onQuit();
+    else if (input === "/") setFocus("filter");
+    else if (input === "r" || input === "d") {
+      const at = indexRef.current !== null ? rows[indexRef.current] : undefined;
+      if (at?.t !== "session") return;
+      if (input === "r") {
+        const next = cycleRuntime(at.session.runtime);
+        rekeyRuntime(at.session.dir, at.session.runtime, next);
+        at.session.runtime = next;
+        setSessions([...sessions]);
+      } else {
+        if (isRunning(at.session)) {
+          setMsg("sessão em execução — X encerra antes de remover do histórico.");
+          return;
+        }
+        remove(at.session.dir, at.session.runtime);
+        setSessions(sessions.filter((x) => x !== at.session));
+        setMsg("Sessão removida do histórico.");
+      }
+    } else if (input === "X" && !key.ctrl && !key.meta && !killing) {
+      const at = indexRef.current !== null ? rows[indexRef.current] : undefined;
+      const info = at ? killableFor(at) : null;
+      if (!info || (!info.tmux && info.procs.length === 0)) {
+        setArmedKill(null);
+        setMsg("nada rodando nessa linha para encerrar.");
+        return;
+      }
+      const k = rowKey(at!);
+      if (armedKill !== k) {
+        setArmedKill(k);
+        setMsg(
+          info.tmux
+            ? `X de novo para encerrar a sessão tmux '${info.tmux}'.`
+            : info.procs.length === 1
+              ? `X de novo para encerrar ${info.label} de verdade.`
+              : `X de novo para encerrar os ${info.procs.length} processos (${info.label}).`,
+        );
+        return;
+      }
+      setArmedKill(null);
+      setKilling(true);
+      void killRow(at!).finally(() => setKilling(false));
+    } else if (input && !key.ctrl && !key.meta && !/[\x00-\x1f\x7f]/.test(input)) {
+      // type-to-filter: any other printable text jumps straight into the filter
+      setQuery((q) => q + input);
+      setFocus("filter");
+    }
+  });
+
+  const columns = stdout?.columns ?? DEFAULT_COLS;
+  const listHeight = listHeightFor(stdout?.rows);
+  const [start, end] = windowSlice(rows.length, index, listHeight);
+  // room for the filter row once root padding takes its share
+  const leftWidth = columns - 4;
+
+  const renderHeader = (label: string, at: number) => {
+    const icon = label[0];
+    const colored = ["⬢", "✳", "◈", "▸"].includes(icon);
+    return (
+      <HeaderRow key={at}>
+        {colored ? (
+          <Text>
+            <Text color={theme.peach}>{icon}</Text>
+            <Dim>{label.slice(1)}</Dim>
+          </Text>
+        ) : (
+          <Dim>{label}</Dim>
+        )}
+      </HeaderRow>
+    );
+  };
+
+  return (
+    <Box flexDirection="column" paddingLeft={2} paddingRight={2}>
+      <Title>
+        {sessions.length === 1 ? "1 sessão" : `${sessions.length} sessões`}
+        {` · ${totals.claude + totals.codex + totals.muse} conversas`}
+      </Title>
+      <Box marginBottom={1}>
+        <Text dimColor>/ </Text>
+        <TextInput
+          key={focus} // fresh input per focus: external query sets would desync its cursor
+          value={query}
+          onChange={setQuery}
+          onSubmit={() => activate(indexRef.current)}
+          focus={focus === "filter"}
+          placeholder={
+            leftWidth >= FULL_HINT_MIN_LEFT
+              ? "filtrar sessões e conversas…  ( digite ou / · esc volta )"
+              : "filtrar…  ( / · esc )"
+          }
+        />
+      </Box>
+      {rows.slice(start, end).map((row, i) => {
+        const at = start + i;
+        const hot = at === index;
+        if (row.t === "header") return renderHeader(row.label, at);
+        if (row.t === "toggleRecents") {
+          return (
+            <ItemRow key={at} hot={hot}>
+              <Text color={hot ? theme.highlightFg : theme.peach}>{toggleRecentsLabel()}</Text>
+            </ItemRow>
+          );
+        }
+        if (row.t === "toggleConvos") {
+          return (
+            <ItemRow key={at} hot={hot}>
+              <Text color={hot ? theme.highlightFg : theme.coral}>{toggleConvosLabel()}</Text>
+            </ItemRow>
+          );
+        }
+        if (row.t === "expandConvo") {
+          return (
+            <ItemRow key={at} hot={hot}>
+              <Text color={hot ? theme.highlightFg : undefined} dimColor={!hot}>
+                {`  ${convoExpandLabel(row)}`}
+              </Text>
+            </ItemRow>
+          );
+        }
+        if (row.t === "domain") {
+          return (
+            <ItemRow key={at} hot={hot}>
+              <Text color={hot ? theme.highlightFg : theme.peach}>{"  ◆ "}</Text>
+              <Text color={hot ? theme.highlightFg : theme.text}>{row.domain}</Text>
+              {hot ? (
+                <Text color="#3A2A1A">{`  ·  ${row.repos} ${row.repos === 1 ? "repo" : "repos"}`}</Text>
+              ) : (
+                <Text dimColor>{`  ·  ${row.repos} ${row.repos === 1 ? "repo" : "repos"}`}</Text>
+              )}
+            </ItemRow>
+          );
+        }
+        if (row.t === "convo") {
+          return (
+            <ItemRow key={at} hot={hot}>
+              <ConvoContent
+                c={row.convo}
+                hot={hot}
+                live={isConvoLive(row.convo)}
+                spin={spin}
+                tmux={tmuxForConvo(row.convo) !== null}
+              />
+            </ItemRow>
+          );
+        }
+        if (row.t === "tmux") {
+          return (
+            <ItemRow key={at} hot={hot}>
+              <TmuxContent name={row.name} runtime={row.runtime} dir={row.dir} hot={hot} spin={spin} />
+            </ItemRow>
+          );
+        }
+        return (
+          <ItemRow key={at} hot={hot}>
+            <SessionContent
+              s={row.session}
+              hot={hot}
+              running={isRunning(row.session)}
+              spin={spin}
+              tmux={tmuxForSession(row.session) !== null}
+            />
+          </ItemRow>
+        );
+      })}
+      <StatusLine msg={msg} />
+      <HintBar
+        hints={
+          focus === "filter"
+            ? HINTS_FILTER
+            : columns >= HINTS_FULL_MIN_COLS
+              ? HINTS_FULL
+              : HINTS_SHORT
+        }
+      />
+    </Box>
+  );
+}

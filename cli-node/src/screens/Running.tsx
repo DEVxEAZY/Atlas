@@ -1,0 +1,289 @@
+import { homedir } from "node:os";
+import React, { useState } from "react";
+import { Box, Text, useInput, useStdout } from "ink";
+import type { Choice } from "../App";
+import type { Session } from "../history";
+import type { NativeSession } from "../native/index";
+import { TRANSCRIPT_PEEK, peekTranscript, type PeekLine } from "../native/peek";
+import { pidsForKey, pidsForResume, procStartedAt, terminatePids } from "../process";
+import { convoDisplay, sessionDisplay } from "../rows";
+import { RUNTIME_COLOR, RUNTIME_ICON, TMUX_MARK, theme } from "../theme";
+import { capturePane, hasSession, killSession } from "../tmux";
+import { ago, shorten } from "../util";
+import { Dim, HintBar, StatusLine, Title } from "../components/chrome";
+
+export type RunningTarget =
+  | { kind: "session"; session: Session; tmux?: string }
+  | { kind: "convo"; convo: NativeSession; tmux?: string };
+
+interface Props {
+  target: RunningTarget;
+  onBack: () => void;
+  onQuit: () => void;
+  onLaunch: (c: Choice) => void;
+  onAttach: (c: Choice) => void;
+}
+
+interface ProcInfo {
+  pid: number;
+  age: string | null;
+}
+
+function resolveProcs(t: RunningTarget): ProcInfo[] {
+  const pids =
+    t.kind === "session"
+      ? pidsForKey(t.session.dir, t.session.runtime)
+      : pidsForResume(t.convo.id);
+  return pids.map((pid) => {
+    const started = procStartedAt(pid);
+    return { pid, age: started === null ? null : ago(new Date(started).toISOString()) };
+  });
+}
+
+export default function Running({ target, onBack, onQuit, onLaunch, onAttach }: Props) {
+  const tmux = target.tmux ?? null;
+  const [procs] = useState<ProcInfo[]>(() => resolveProcs(target));
+  const [tmuxAlive, setTmuxAlive] = useState(() => (tmux ? hasSession(tmux) : true));
+  const [peekSupported] = useState(
+    () => target.kind === "convo" && TRANSCRIPT_PEEK[target.convo.harness],
+  );
+  const [peekLines] = useState<PeekLine[]>(() =>
+    target.kind === "convo" && TRANSCRIPT_PEEK[target.convo.harness]
+      ? peekTranscript(target.convo.harness, target.convo.file)
+      : [],
+  );
+  const [tmuxLines, setTmuxLines] = useState<string[]>(() =>
+    tmux ? capturePane(tmux) : [],
+  );
+  const [hiddenTail, setHiddenTail] = useState(0); // transcript lines hidden below the fold
+  const [armed, setArmed] = useState(false);
+  const [killing, setKilling] = useState(false);
+  const [msg, setMsg] = useState("");
+  const { stdout } = useStdout();
+
+  const ended = tmux ? !tmuxAlive : procs.length === 0;
+  const runtime = target.kind === "session" ? target.session.runtime : target.convo.harness;
+  const dir = target.kind === "session" ? target.session.dir : target.convo.dir;
+  const name =
+    target.kind === "session" ? sessionDisplay(target.session) : convoDisplay(target.convo);
+  const icon = RUNTIME_ICON[runtime] ?? "•";
+  const iconColor = RUNTIME_COLOR[runtime] ?? theme.text;
+
+  const listHeight = Math.max(5, (stdout?.rows || 24) - 12);
+  const totalLines = tmux ? tmuxLines.length : peekLines.length;
+  const maxHidden = Math.max(0, totalLines - listHeight);
+  const hidden = Math.min(hiddenTail, maxHidden);
+  const start = Math.max(0, totalLines - listHeight - hidden);
+  const visible = peekLines.slice(start, start + listHeight);
+  const visibleTmux = tmuxLines.slice(start, start + listHeight);
+  const scrollable = totalLines > listHeight;
+
+  const kill = async () => {
+    if (killing) return;
+    setKilling(true);
+    if (tmux) {
+      setMsg("encerrando sessão tmux…");
+      if (!hasSession(tmux)) {
+        onBack(); // died on its own while viewing
+        return;
+      }
+      if (killSession(tmux) && !hasSession(tmux)) {
+        onBack();
+        return;
+      }
+      setKilling(false);
+      setArmed(false);
+      setMsg(`não consegui encerrar a sessão tmux '${tmux}'.`);
+      return;
+    }
+    setMsg("encerrando…");
+    const fresh = resolveProcs(target).map((p) => p.pid);
+    if (fresh.length === 0) {
+      onBack(); // died on its own while viewing
+      return;
+    }
+    const result = await terminatePids(fresh);
+    if (result.alive.length === 0) {
+      onBack();
+      return;
+    }
+    setKilling(false);
+    setArmed(false);
+    setMsg(`não consegui encerrar o PID ${result.alive.join(", ")} — sem permissão?`);
+  };
+
+  const refreshTmux = () => {
+    if (!tmux) return;
+    const alive = hasSession(tmux);
+    setTmuxAlive(alive);
+    setTmuxLines(alive ? capturePane(tmux) : []);
+    setHiddenTail(0);
+    setArmed(false);
+    if (!alive) setMsg("a sessão tmux encerrou — Enter abre de novo, esc volta.");
+  };
+
+  useInput((input, key) => {
+    if (key.ctrl && input === "c") {
+      onQuit();
+      return;
+    }
+    if (key.escape) {
+      onBack(); // leaving never touches the original process
+      return;
+    }
+    if (key.upArrow) setHiddenTail((h) => h + 1);
+    else if (key.downArrow) setHiddenTail((h) => Math.max(0, h - 1));
+    else if (key.pageUp) setHiddenTail((h) => h + listHeight);
+    else if (key.pageDown) setHiddenTail((h) => Math.max(0, h - listHeight));
+    else if (key.return && tmux && !ended) {
+      onAttach(
+        target.kind === "session"
+          ? { dir: target.session.dir, runtime: target.session.runtime, attachTmux: tmux }
+          : {
+              dir: target.convo.dir ?? homedir(),
+              runtime: target.convo.harness,
+              resume: target.convo.id,
+              attachTmux: tmux,
+            },
+      );
+    } else if (key.return && ended) {
+      onLaunch(
+        target.kind === "session"
+          ? { dir: target.session.dir, runtime: target.session.runtime }
+          : {
+              dir: target.convo.dir ?? homedir(),
+              runtime: target.convo.harness,
+              resume: target.convo.id,
+            },
+      );
+    } else if (input === "r" && tmux && !ended && !key.ctrl && !key.meta) {
+      refreshTmux();
+    } else if (input === "X" && !key.ctrl && !key.meta && !ended) {
+      if (!armed) {
+        setArmed(true);
+        setMsg(
+          tmux
+            ? `X de novo para encerrar a sessão tmux '${tmux}'.`
+            : procs.length === 1
+              ? "X de novo para encerrar o processo de verdade."
+              : `X de novo para encerrar os ${procs.length} processos de verdade.`,
+        );
+      } else {
+        void kill();
+      }
+    }
+  });
+
+  return (
+    <Box flexDirection="column" paddingLeft={2} paddingRight={2}>
+      <Title>
+        {tmux ? <Text color={theme.peach}>{`${TMUX_MARK} `}</Text> : null}
+        {ended
+          ? "Sessão encerrada"
+          : tmux
+            ? `Sessão em execução · ${tmux}`
+            : "Sessão em execução · somente leitura"}
+      </Title>
+      <Box marginBottom={1}>
+        <Text>
+          <Text color={iconColor}>{`${icon} `}</Text>
+          <Text color={theme.text}>{`${runtime} ${name}`}</Text>
+          <Text dimColor>{`  ·  ${dir ? shorten(dir) : "—"}`}</Text>
+        </Text>
+      </Box>
+      {target.kind === "convo" && (
+        <Box marginBottom={1}>
+          <Text dimColor>resume: {target.convo.id}</Text>
+        </Box>
+      )}
+      {ended ? (
+        <Box marginBottom={1}>
+          <Text color={theme.amber}>
+            ⚠ a sessão encerrou sozinha antes de abrir — Enter abre agora, esc volta.
+          </Text>
+        </Box>
+      ) : tmux ? (
+        <Box flexDirection="column" marginBottom={1}>
+          <Text color={theme.amber} wrap="truncate">
+            ⚠ gerenciada pelo atlas no tmux — entrar e ler nunca interrompem o agente.
+          </Text>
+          {procs.length > 0 && (
+            <Text wrap="truncate">
+              {procs.map((p) => `PID ${p.pid}${p.age ? ` · ${p.age}` : ""}`).join("   ")}
+            </Text>
+          )}
+          <Dim>para iniciar outra instância, use Nova sessão (n) no Hub.</Dim>
+        </Box>
+      ) : (
+        <Box flexDirection="column" marginBottom={1}>
+          <Text color={theme.amber} wrap="truncate">
+            ⚠ já está rodando em outro lugar — abrir de novo corromperia a sessão.
+          </Text>
+          <Text wrap="truncate">
+            {procs.map((p) => `PID ${p.pid}${p.age ? ` · ${p.age}` : ""}`).join("   ")}
+          </Text>
+          <Dim>para iniciar outra instância, use Nova sessão (n) no Hub.</Dim>
+        </Box>
+      )}
+      {tmux && !ended && tmuxLines.length > 0 && (
+        <Box flexDirection="column" marginBottom={1}>
+          <Dim>{`— tmux · linhas ${start + 1}–${start + visibleTmux.length} de ${tmuxLines.length} —`}</Dim>
+          {visibleTmux.map((l, i) => (
+            <Text key={start + i} wrap="truncate">
+              {l === "" ? " " : l}
+            </Text>
+          ))}
+        </Box>
+      )}
+      {tmux && !ended && tmuxLines.length === 0 && (
+        <Box marginBottom={1}>
+          <Dim>painel tmux vazio ainda — r atualiza a leitura.</Dim>
+        </Box>
+      )}
+      {!tmux && target.kind === "convo" && !ended && peekSupported && peekLines.length > 0 && (
+        <Box flexDirection="column" marginBottom={1}>
+          <Dim>{`— log · linhas ${start + 1}–${start + visible.length} de ${peekLines.length} —`}</Dim>
+          {visible.map((l, i) => (
+            <Text key={start + i} wrap="truncate">
+              <Text dimColor>{l.role === "você" ? "você › " : "agente › "}</Text>
+              {l.text}
+            </Text>
+          ))}
+        </Box>
+      )}
+      {!tmux && target.kind === "convo" && !ended && !peekSupported && (
+        <Box marginBottom={1}>
+          <Dim>transcrição ao vivo indisponível para Muse — o processo acima segue intacto.</Dim>
+        </Box>
+      )}
+      {!tmux && target.kind === "convo" && !ended && peekSupported && peekLines.length === 0 && (
+        <Box marginBottom={1}>
+          <Dim>sem mensagens legíveis no log ainda.</Dim>
+        </Box>
+      )}
+      <StatusLine msg={msg} />
+      <HintBar
+        hints={
+          ended
+            ? [
+                ["Enter", "abrir agora"],
+                ["esc", "voltar"],
+              ]
+            : tmux
+              ? [
+                  ["Enter", "entrar"],
+                  ["r", "atualizar"],
+                  ["esc", "voltar"],
+                  ["X", "encerrar"],
+                  ...(scrollable ? [["↑↓", "rolar"] as [string, string]] : []),
+                ]
+              : [
+                  ["esc", "voltar sem matar"],
+                  ["X", "encerrar sessão"],
+                  ...(scrollable ? [["↑↓", "rolar"] as [string, string]] : []),
+                ]
+        }
+      />
+    </Box>
+  );
+}

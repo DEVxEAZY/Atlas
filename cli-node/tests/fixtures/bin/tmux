@@ -1,0 +1,20 @@
+#!/bin/sh
+# Fake tmux for tests. State dir in $TMUX_FAKE_STATE:
+#   sessions  `tmux ls -F` lines (name<TAB>attached<TAB>created)
+#   pane      `capture-pane -p` output
+#   calls     appended invocations (all but ls/has-session/capture-pane)
+state="${TMUX_FAKE_STATE:?TMUX_FAKE_STATE not set}"
+case "$1" in
+  ls) cat "$state/sessions" 2>/dev/null;;
+  has-session)
+    awk -F'\t' -v n="$3" '$1==n{found=1} END{exit !found}' "$state/sessions" 2>/dev/null;;
+  capture-pane) cat "$state/pane" 2>/dev/null;;
+  list-panes) cat "$state/panes" 2>/dev/null;;
+  kill-session)
+    echo "$@" >> "$state/calls"
+    awk -F'\t' -v n="$3" '$1!=n' "$state/sessions" 2>/dev/null > "$state/sessions.tmp" && mv "$state/sessions.tmp" "$state/sessions"
+    awk -F'\t' -v n="$3" '$1!=n' "$state/panes" 2>/dev/null > "$state/panes.tmp" && mv "$state/panes.tmp" "$state/panes"
+    ;;
+  new-session|attach-session|switch-client) echo "$@" >> "$state/calls";;
+  *) echo "fake-tmux: unsupported: $*" >&2; exit 1;;
+esac

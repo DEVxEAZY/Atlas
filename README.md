@@ -1,35 +1,117 @@
-# Atlas Harness
+# Atlas
 
-Atlas é o harness desktop para organizar e operar fluxos de desenvolvimento em servidores Linux remotos sem depender, no primeiro momento, de uma API customizada de runtime.
+[![CI](https://github.com/DEVxEAZY/Atlas/actions/workflows/ci.yml/badge.svg)](https://github.com/DEVxEAZY/Atlas/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Bun](https://img.shields.io/badge/runtime-Bun-black?logo=bun)](https://bun.sh)
 
-O produto oferece uma interface local para Windows, conecta-se ao host por SSH e apresenta domínios, workspaces, repositórios, sessões Codex/Claude e terminais brutos sem criar uma árvore virtual diferente do filesystem remoto.
+Atlas is a terminal session manager for coding agents. Pick a directory,
+pick a runtime (Codex, Claude, Muse, or a plain shell), and Atlas opens it
+inside tmux — then lets you find, enter, peek at, and kill every session
+from one place, in any terminal.
 
-> **Estado:** arquitetura inicial. A continuidade da interface e do harness acontece neste repositório. A stack e o mecanismo de persistência dos processos ainda serão decididos antes do scaffold.
+```text
+  Atlas — 2 sessões · 0 conversas
 
-## Primeiro recorte
+  / filtrar sessões e conversas…  ( digite ou / · esc volta )
 
-- aplicativo desktop Windows;
-- credenciais e conexões SSH mantidas fora do renderer;
-- domínios e workspaces baseados em diretórios Linux reais;
-- Explorer do Domínio projetando a árvore remota;
-- abertura de sessões Codex ou Claude em um diretório escolhido;
-- console uniforme da aplicação para as sessões de runtime;
-- terminal SSH bruto como ferramenta separada;
-- várias sessões visíveis em abas ou painéis;
-- nenhuma dependência obrigatória do `delta-runtime` no primeiro MVP.
+  ▸ Recentes · 2
+  ▸ Conversas · nenhuma
+  ◈ sessões tmux  ·  1 sessão
+  ⠴ 𖥠 ▸ shell  atlas-demo-shell-a1b2c3  · ~/demo/demo-api
+    ◆ wd  ·  0 repos
 
-O escopo consolidado, as decisões adotadas e as questões ainda abertas estão em [docs/product-brief.md](docs/product-brief.md).
 
-## Relação com os outros repositórios
+  Enter abrir · n nova · r runtime · d remover · X matar · / filtrar · q sair
+```
 
-| Repositório | Responsabilidade |
+> The TUI speaks Brazilian Portuguese. This document is in English.
+
+## Features
+
+- **One launcher** for Codex, Claude, Muse, and shell, per directory.
+- **Recents with history** — reopen anything with `Enter`; live sessions pin
+  to the top with an animated indicator.
+- **Native conversations** — reads the Claude/Codex/Muse stores and resumes
+  conversations in their original runtime.
+- **tmux-backed sessions** — every launch runs as `atlas-<dir>-<runtime>-<hash>`.
+  From any other terminal, Atlas lists it (marked `𖥠`), shows a read-only
+  pane preview, attaches to it, or kills it. Attach uses `exec` (same PID),
+  so the client is never orphaned; nested runs use `switch-client`.
+- **Unmanaged tmux section** — orphaned `atlas-*` sessions plus foreign
+  sessions with an agent in a pane show up as `◈ sessões tmux`, with the
+  same view/attach/kill gestures. Idle foreign shells stay out of the way.
+- **Safe kills** — destructive keys arm on first press and act on second;
+  removing a running session from history is refused with guidance.
+- **Single binary** — `bun build --compile`, no venv, no runtime to install.
+
+## Quickstart
+
+Prerequisites: [Bun](https://bun.sh) and [tmux](https://github.com/tmux/tmux).
+
+```sh
+git clone https://github.com/DEVxEAZY/Atlas.git
+cd Atlas/cli-node
+bun install
+bun run build                  # produces dist/atlas (~100MB, standalone)
+install dist/atlas ~/.local/bin/atlas
+atlas                          # open the TUI
+```
+
+## Using it
+
+| Screen | Keys |
 |---|---|
-| [`DEVxEAZY/Atlas`](https://github.com/DEVxEAZY/Atlas) | Interface desktop, fluxo de trabalho, SSH, Explorer e consoles. |
-| [`DEVxEAZY/delta-runtime`](https://github.com/DEVxEAZY/delta-runtime) | Futuro gateway estruturado para controlar sessões nativas por API. |
-| `motor-de-agentes` | Caderno de produto e arquitetura ampla; não é a implementação do Atlas. |
+| Hub | `Enter` expand/open/resume · `←→` collapse/expand · `n` new · `r` runtime · `d` remove (refused while running) · `X` twice to kill the row · `/` filter · `q` quit · type to filter |
+| Running session (tmux 𖥠) | `Enter` attach · `r` refresh pane preview · `esc` back · `X` twice to end the session · `↑↓` scroll |
+| Running session (external) | `esc` back without touching the process · `X` twice to really end it · `↑↓` scroll the log |
+| Domain / New session | type to filter or paste a path · `Enter` confirm · `esc` back |
+| Runtime | `↑↓` move · `Enter` pick (pre-selects the directory's last runtime) · `esc` back |
 
-Atlas pode integrar o `delta-runtime` futuramente, mas os dois produtos permanecem independentes: o harness deve ser útil por SSH antes dessa integração.
+`ctrl+c` quits from anywhere. Recents shows the last 10; the filter searches
+all of history. For a deliberate second instance in one directory use `n`
+(New session) — `Enter` on a list never duplicates.
 
-## Princípio de eficiência
+Without the TUI:
 
-Atlas não pretende recriar o VS Code, fabricar um emulador de terminal ou antecipar uma plataforma de orquestração. O primeiro objetivo é provar um fluxo pessoal, remoto e confiável usando peças consolidadas para SSH, PTY e renderização de terminal.
+```sh
+atlas --list
+atlas --dir ~/repo --runtime codex
+atlas --dir ~/repo --runtime claude --print   # show the tmux plan only
+```
+
+Inside an attached session, `prefix + d` (`Ctrl-b d`) detaches without
+killing. Without tmux installed, sessions open directly in the terminal
+(with no cross-terminal management).
+
+## Configuration
+
+| Setting | Default |
+|---|---|
+| History file | `~/.local/share/atlas/history.json` |
+| `ATLAS_ROOTS` | `~/@development:~/@megavale-repos` (`:`-separated scan roots) |
+| `ATLAS_HISTORY_FILE` | override for the history path |
+| `ATLAS_TMUX_BIN` | override for the tmux binary (default: `PATH` lookup) |
+
+## Repository layout
+
+| Path | What |
+|---|---|
+| `cli-node/` | The maintained tool (Bun + TypeScript + Ink). See [cli-node/README.md](cli-node/README.md). |
+| `cli/` | Original Python prototype, kept for reference. Superseded by `cli-node/`. |
+| `docs/` | Product notes. |
+
+## Development
+
+```sh
+cd cli-node
+bun install
+bun run atlas      # run the TUI from source
+bun test tests/    # 123 tests
+```
+
+CI runs install, tests, and the compiled build on every push to `main` and
+every pull request.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

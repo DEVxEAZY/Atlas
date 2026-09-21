@@ -1,0 +1,21 @@
+{
+  "name": "atlas-cli-node",
+  "version": "0.1.0",
+  "description": "Atlas CLI/TUI port (Node): open coding-agent sessions in the right directory.",
+  "type": "module",
+  "scripts": {
+    "atlas": "bun src/main.tsx",
+    "build": "bun build --compile src/main.tsx --outfile dist/atlas",
+    "test": "bun test tests/"
+  },
+  "dependencies": {
+    "ink": "^7.1.1",
+    "ink-text-input": "^6.0.0",
+    "react": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "bun-types": "^1.4.2",
+    "ink-testing-library": "^4.0.0"
+  }
+}

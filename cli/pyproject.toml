@@ -1,0 +1,19 @@
+[project]
+name = "atlas-cli"
+version = "0.1.0"
+description = "Atlas CLI/TUI prototype: open coding-agent sessions in the right directory."
+requires-python = ">=3.12"
+dependencies = ["textual"]
+
+[project.scripts]
+atlas = "atlas_cli.main:main"
+
+[dependency-groups]
+dev = ["pytest", "pytest-asyncio"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

@@ -1,0 +1,2 @@
+{"timestamp":"2026-09-19T05:00:16.487Z","ordinal":0,"type":"session_meta","payload":{"session_id":"01a0aaaa-bbbb-cccc-dddd-eeeeeeeeeeee","id":"01a0aaaa-bbbb-cccc-dddd-eeeeeeeeeeee","timestamp":"2026-09-19T05:00:16.419Z","cwd":"/home/dev/@megavale-repos/esl-api-server","cli_version":"0.154.0"}}
+{"timestamp":"2026-09-19T05:00:17.000Z","ordinal":1,"type":"event_msg","payload":{"type":"message"}}
