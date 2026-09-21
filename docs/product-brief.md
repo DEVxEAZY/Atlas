@@ -58,6 +58,8 @@ open Atlas
 
 ## Non-goals
 
+- SSH client features: Atlas is a CLI for the terminal itself — it runs on
+  the machine (local or already-remote) and manages that machine's sessions.
 - Recreating VS Code, a terminal emulator, or an orchestration platform.
 - Multi-user, RBAC, or credential sharing.
 - File sync, uploads, or permission management through the UI.

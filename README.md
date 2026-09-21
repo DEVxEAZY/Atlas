@@ -9,6 +9,10 @@ pick a runtime (Codex, Claude, Muse, or a plain shell), and Atlas opens it
 inside tmux — then lets you find, enter, peek at, and kill every session
 from one place, in any terminal.
 
+Atlas runs where your terminal runs — local machine or an already-remote
+shell — and manages that machine's sessions. It is a CLI for the terminal
+itself, not an SSH client: no connections to configure.
+
 ![Atlas Hub](docs/atlas-hub.svg)
 
 > The TUI speaks Brazilian Portuguese. This document is in English.
