@@ -1,0 +1,103 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+        working-directory: cli-node
+      - name: Shim agent CLIs on PATH
+        run: |
+          mkdir -p /tmp/cibin
+          for runtime in codex claude muse; do
+            printf '#!/bin/sh\nexit 0\n' > "/tmp/cibin/$runtime"
+            chmod +x "/tmp/cibin/$runtime"
+          done
+          echo /tmp/cibin >> "$GITHUB_PATH"
+      - run: bun test tests/
+        working-directory: cli-node
+
+  package:
+    name: Package ${{ matrix.artifact }}
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: bun-linux-x64-baseline
+            artifact: atlas-linux-x64
+          - target: bun-linux-arm64
+            artifact: atlas-linux-arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+        working-directory: cli-node
+      - name: Build and package
+        working-directory: cli-node
+        run: |
+          mkdir -p dist
+          bun build --compile --target="${{ matrix.target }}" src/main.tsx --outfile "dist/${{ matrix.artifact }}"
+          chmod 0755 "dist/${{ matrix.artifact }}"
+          tar -C dist -czf "dist/${{ matrix.artifact }}.tar.gz" "${{ matrix.artifact }}"
+          cd dist
+          sha256sum "${{ matrix.artifact }}.tar.gz" > "${{ matrix.artifact }}.tar.gz.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.artifact }}
+          path: |
+            cli-node/dist/${{ matrix.artifact }}.tar.gz
+            cli-node/dist/${{ matrix.artifact }}.tar.gz.sha256
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$GITHUB_REF_NAME"
+          notes_file="docs/releases/${tag}.md"
+          assets=(
+            release-assets/atlas-linux-x64.tar.gz
+            release-assets/atlas-linux-x64.tar.gz.sha256
+            release-assets/atlas-linux-arm64.tar.gz
+            release-assets/atlas-linux-arm64.tar.gz.sha256
+          )
+
+          if [[ -f "$notes_file" ]]; then
+            gh release create "$tag" "${assets[@]}" --verify-tag --title "$tag" --notes-file "$notes_file"
+          else
+            gh release create "$tag" "${assets[@]}" --verify-tag --title "$tag" --generate-notes
+          fi

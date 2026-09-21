@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="700" viewBox="0 0 1100 700" xml:space="preserve" font-family="DejaVu Sans Mono,monospace" role="img" aria-label="Detach. The agent keeps running.">
+<title>Detach. The agent keeps running.</title><defs>
+    <!-- Hand-drawn vector equivalent of TMUX_MARK (𖥠, U+16960).
+         Bamum Supplement is absent from common terminal/web fallback fonts. -->
+    <g id="tmux-mark" aria-label="𖥠">
+      <circle cx="10" cy="10" r="4.2" fill="none" stroke="currentColor" stroke-width="1.1"/>
+      <path d="M10 2V18M2 10H18" stroke="currentColor" stroke-width="1.1"/>
+      <circle cx="10" cy="2" r="1.2"/><circle cx="10" cy="18" r="1.2"/>
+      <circle cx="2" cy="10" r="1.2"/><circle cx="18" cy="10" r="1.2"/>
+    </g>
+  </defs><rect width="1100" height="700" fill="#000000"/><text style="white-space:pre" x="50" y="43" fill="#FFB386" font-size="16" letter-spacing="1">02 / 06 · LEAVE THE TERMINAL</text>
+<text style="white-space:pre" x="48" y="100" fill="#FFFFFF" font-size="35" font-family="DejaVu Sans,sans-serif" font-weight="bold">Detach. The agent keeps running.</text>
+<g transform="translate(50 133)"><rect x="1" y="1" width="998" height="468" rx="14" fill="#0D0D0D" stroke="#2A2A2A"/><text style="white-space:pre" x="28" y="30" fill="#8A8A8A" font-size="16" >terminal 1 · ~/@development/atlas-cli</text><path d="M1 47H999" stroke="#2A2A2A"/>
+<text style="white-space:pre" x="32" y="99" fill="#8A8A8A" font-size="20" >[detached (from session atlas-atlas-cli-codex-d77372)]</text>
+<text style="white-space:pre" x="32" y="158" fill="#F8F4EB" font-size="20" >~/@development/atlas-cli $</text>
+<rect x="351" y="138" width="11" height="23" fill="#FFB386"/></g>
+<text style="white-space:pre" x="50" y="645" fill="#F8F4EB" font-size="21" >Ctrl-b, then d  →  detach (default tmux prefix)</text>
+<rect x="50" y="677" width="154" height="3" fill="#FFB386"/>
+<rect x="218" y="677" width="154" height="3" fill="#FFB386"/>
+<rect x="386" y="677" width="154" height="3" fill="#2A2A2A"/>
+<rect x="554" y="677" width="154" height="3" fill="#2A2A2A"/>
+<rect x="722" y="677" width="154" height="3" fill="#2A2A2A"/>
+<rect x="890" y="677" width="154" height="3" fill="#2A2A2A"/>
+</svg>

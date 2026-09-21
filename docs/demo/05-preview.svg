@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="700" viewBox="0 0 1100 700" xml:space="preserve" font-family="DejaVu Sans Mono,monospace" role="img" aria-label="Preview without interrupting.">
+<title>Preview without interrupting.</title><defs>
+    <!-- Hand-drawn vector equivalent of TMUX_MARK (𖥠, U+16960).
+         Bamum Supplement is absent from common terminal/web fallback fonts. -->
+    <g id="tmux-mark" aria-label="𖥠">
+      <circle cx="10" cy="10" r="4.2" fill="none" stroke="currentColor" stroke-width="1.1"/>
+      <path d="M10 2V18M2 10H18" stroke="currentColor" stroke-width="1.1"/>
+      <circle cx="10" cy="2" r="1.2"/><circle cx="10" cy="18" r="1.2"/>
+      <circle cx="2" cy="10" r="1.2"/><circle cx="18" cy="10" r="1.2"/>
+    </g>
+  </defs><rect width="1100" height="700" fill="#000000"/><text style="white-space:pre" x="50" y="43" fill="#FFB386" font-size="16" letter-spacing="1">05 / 06 · READ-ONLY PREVIEW</text>
+<text style="white-space:pre" x="48" y="100" fill="#FFFFFF" font-size="35" font-family="DejaVu Sans,sans-serif" font-weight="bold">Preview without interrupting.</text>
+<g transform="translate(50 133)"><rect x="1" y="1" width="998" height="468" rx="14" fill="#0D0D0D" stroke="#2A2A2A"/><text style="white-space:pre" x="28" y="30" fill="#8A8A8A" font-size="16" >atlas</text><path d="M1 47H999" stroke="#2A2A2A"/>
+<text style="white-space:pre" x="32" y="88" fill="#FFFFFF" font-size="20" font-weight="bold">Atlas</text><text style="white-space:pre" x="104" y="88" fill="#8A8A8A" font-size="20" >—</text><use href="#tmux-mark" x="130" y="72" fill="#FFB386" color="#FFB386"/>
+<text style="white-space:pre" x="158" y="88" fill="#8A8A8A" font-size="18" >Sessão em execução · atlas-atlas-cli-codex-d77372</text>
+<text style="white-space:pre" x="32" y="132" fill="#FFB386" font-size="20" >⬢</text><text style="white-space:pre" x="60" y="132" fill="#F8F4EB" font-size="20" >codex atlas-cli</text><text style="white-space:pre" x="251" y="132" fill="#8A8A8A" font-size="20" >· ~/@development/atlas-cli</text>
+<text style="white-space:pre" x="32" y="182" fill="#F2C14E" font-size="18" >⚠ gerenciada pelo atlas no tmux — entrar e ler nunca interrompem o agente.</text>
+<text style="white-space:pre" x="32" y="212" fill="#8A8A8A" font-size="18" >para iniciar outra instância, use Nova sessão (n) no Hub.</text>
+<text style="white-space:pre" x="32" y="257" fill="#8A8A8A" font-size="18" >— tmux · linhas 1–5 de 5 —</text>
+<text style="white-space:pre" x="32" y="289" fill="#F8F4EB" font-size="18" >Codex</text>
+<text style="white-space:pre" x="32" y="316" fill="#F8F4EB" font-size="18" >› Revise os testes do projeto.</text>
+<text style="white-space:pre" x="32" y="343" fill="#F8F4EB" font-size="18" >• Lendo cli-node/tests/</text>
+<text style="white-space:pre" x="32" y="370" fill="#F8F4EB" font-size="18" >• Conferindo os fluxos de sessão e reentrada.</text>
+<text style="white-space:pre" x="32" y="397" fill="#F8F4EB" font-size="18" >• Trabalhando…</text>
+<text style="white-space:pre" x="32" y="446" fill="#FFB386" font-size="18" >Enter</text><text style="white-space:pre" x="88" y="446" fill="#8A8A8A" font-size="18" > entrar · </text>
+<text style="white-space:pre" x="196" y="446" fill="#FFB386" font-size="18" >r</text><text style="white-space:pre" x="208" y="446" fill="#8A8A8A" font-size="18" > atualizar · </text>
+<text style="white-space:pre" x="348" y="446" fill="#FFB386" font-size="18" >esc</text><text style="white-space:pre" x="380" y="446" fill="#8A8A8A" font-size="18" > voltar · </text>
+<text style="white-space:pre" x="488" y="446" fill="#FFB386" font-size="18" >X</text><text style="white-space:pre" x="500" y="446" fill="#8A8A8A" font-size="18" > encerrar</text></g>
+<text style="white-space:pre" x="50" y="645" fill="#F8F4EB" font-size="21" >Enter  →  re-enter the existing tmux session</text>
+<rect x="50" y="677" width="154" height="3" fill="#FFB386"/>
+<rect x="218" y="677" width="154" height="3" fill="#FFB386"/>
+<rect x="386" y="677" width="154" height="3" fill="#FFB386"/>
+<rect x="554" y="677" width="154" height="3" fill="#FFB386"/>
+<rect x="722" y="677" width="154" height="3" fill="#FFB386"/>
+<rect x="890" y="677" width="154" height="3" fill="#2A2A2A"/>
+</svg>

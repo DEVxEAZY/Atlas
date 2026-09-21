@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="700" viewBox="0 0 1100 700" xml:space="preserve" font-family="DejaVu Sans Mono,monospace" role="img" aria-label="Atlas — github.com/DEVxEAZY/atlas-cli">
+<title>Atlas — github.com/DEVxEAZY/atlas-cli</title><defs>
+    <!-- Hand-drawn vector equivalent of TMUX_MARK (𖥠, U+16960).
+         Bamum Supplement is absent from common terminal/web fallback fonts. -->
+    <g id="tmux-mark" aria-label="𖥠">
+      <circle cx="10" cy="10" r="4.2" fill="none" stroke="currentColor" stroke-width="1.1"/>
+      <path d="M10 2V18M2 10H18" stroke="currentColor" stroke-width="1.1"/>
+      <circle cx="10" cy="2" r="1.2"/><circle cx="10" cy="18" r="1.2"/>
+      <circle cx="2" cy="10" r="1.2"/><circle cx="18" cy="10" r="1.2"/>
+    </g>
+  </defs><rect width="1100" height="700" fill="#000000"/><text style="white-space:pre" x="64" y="98" fill="#FFB386" font-size="19" letter-spacing="2">CODEX · CLAUDE · MUSE · SHELL</text>
+<text style="white-space:pre" x="60" y="244" fill="#FFFFFF" font-size="52" font-family="DejaVu Sans,sans-serif" font-weight="bold">Every coding-agent session.</text>
+<text style="white-space:pre" x="60" y="315" fill="#FFB386" font-size="52" font-family="DejaVu Sans,sans-serif" font-weight="bold">One terminal hub.</text>
+<text style="white-space:pre" x="64" y="391" fill="#F8F4EB" font-size="28" font-family="DejaVu Sans,sans-serif">Launch · detach · preview · re-enter</text>
+<path d="M64 465H156" stroke="#FFB386" stroke-width="3"/>
+<text style="white-space:pre" x="62" y="560" fill="#FFFFFF" font-size="31" >github.com/DEVxEAZY/atlas-cli</text>
+<text style="white-space:pre" x="64" y="645" fill="#8A8A8A" font-size="24" font-weight="bold">Atlas</text>
+</svg>

@@ -1,0 +1,54 @@
+name: Bug report
+description: Report a reproducible Atlas defect using redacted or synthetic data.
+title: "Bug: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For usage questions, use https://github.com/DEVxEAZY/atlas-cli/discussions.
+        Report security issues privately at https://github.com/DEVxEAZY/atlas-cli/security/advisories/new.
+        Do not include credentials, private paths, or real conversation content.
+  - type: input
+    id: version
+    attributes:
+      label: Atlas release or commit
+      description: Use the downloaded release tag or the source commit; Atlas has no --version flag.
+      placeholder: v0.1.0
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Linux distribution, architecture (uname -m), terminal, tmux version or absent, inside/outside tmux, and relevant agent CLI versions.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Include commands or keys and a minimal synthetic example. Note any relevant ATLAS_* configuration, with paths redacted.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include sanitized error output or screenshots if useful.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues for this problem.
+          required: true
+        - label: I removed credentials and private information from this report.
+          required: true

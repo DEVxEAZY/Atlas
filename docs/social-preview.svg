@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="470" viewBox="0 0 1000 470" xml:space="preserve" font-family="DejaVu Sans Mono,monospace" role="img" aria-label="Atlas Hub — três sessões ao vivo em ◉ agora, gerenciadas no tmux">
-  <title>Atlas Hub — três sessões ao vivo em ◉ agora, gerenciadas no tmux</title>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" xml:space="preserve" font-family="DejaVu Sans Mono,monospace" role="img" aria-label="Atlas — Every coding-agent session. One terminal hub.">
+  <title>Atlas — Every coding-agent session. One terminal hub.</title>
   <defs>
     <!-- Hand-drawn vector equivalent of TMUX_MARK (𖥠, U+16960).
          Bamum Supplement is absent from common terminal/web fallback fonts. -->
@@ -10,7 +10,16 @@
       <circle cx="2" cy="10" r="1.2"/><circle cx="18" cy="10" r="1.2"/>
     </g>
   </defs>
-  <rect x="1" y="1" width="998" height="468" rx="14" fill="#0D0D0D" stroke="#2A2A2A"/>
+
+  <rect width="1280" height="640" fill="#000000"/>
+  <text style="white-space:pre" x="64" y="67" fill="#FFB386" font-size="17" letter-spacing="1.5">CODEX · CLAUDE · MUSE · SHELL</text>
+  <text style="white-space:pre" x="60" y="143" fill="#FFFFFF" font-size="57" font-family="DejaVu Sans,sans-serif" font-weight="bold">Every coding-agent session.</text>
+  <text style="white-space:pre" x="60" y="215" fill="#FFB386" font-size="57" font-family="DejaVu Sans,sans-serif" font-weight="bold">One terminal hub.</text>
+  <text style="white-space:pre" x="64" y="275" fill="#F8F4EB" font-size="23" font-family="DejaVu Sans,sans-serif">Launch · detach · preview · re-enter</text>
+  <text style="white-space:pre" x="60" y="451" fill="#F8F4EB" font-size="72" font-family="DejaVu Sans,sans-serif" font-weight="bold">Atlas</text>
+  <path d="M64 492H124" stroke="#FFB386" stroke-width="3"/>
+  <text style="white-space:pre" x="64" y="565" fill="#8A8A8A" font-size="18" >github.com/DEVxEAZY/atlas-cli</text>
+  <g transform="translate(576 300) scale(.64)"><rect x="1" y="1" width="998" height="468" rx="14" fill="#0D0D0D" stroke="#2A2A2A"/>
   <circle cx="25" cy="23" r="4" fill="#FFB386"/><circle cx="43" cy="23" r="4" fill="#FF8F6B"/><circle cx="61" cy="23" r="4" fill="#F472A0"/>
   <text style="white-space:pre" x="500" y="29" fill="#8A8A8A" font-size="16" text-anchor="middle">atlas</text>
   <path d="M1 47H999" stroke="#2A2A2A"/>
@@ -45,5 +54,5 @@
   <text style="white-space:pre" x="411" y="442" fill="#FFB386" font-size="18" >d</text><text style="white-space:pre" x="423" y="442" fill="#8A8A8A" font-size="18" > remover · </text>
   <text style="white-space:pre" x="541" y="442" fill="#FFB386" font-size="18" >X</text><text style="white-space:pre" x="553" y="442" fill="#8A8A8A" font-size="18" > matar · </text>
   <text style="white-space:pre" x="649" y="442" fill="#FFB386" font-size="18" >/</text><text style="white-space:pre" x="661" y="442" fill="#8A8A8A" font-size="18" > filtrar · </text>
-  <text style="white-space:pre" x="779" y="442" fill="#FFB386" font-size="18" >q</text><text style="white-space:pre" x="791" y="442" fill="#8A8A8A" font-size="18" > sair</text>
+  <text style="white-space:pre" x="779" y="442" fill="#FFB386" font-size="18" >q</text><text style="white-space:pre" x="791" y="442" fill="#8A8A8A" font-size="18" > sair</text></g>
 </svg>
