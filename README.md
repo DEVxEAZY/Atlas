@@ -39,14 +39,13 @@ For x86_64, run the following. On arm64, replace `atlas-linux-x64` with
 ```sh
 atlas_asset=atlas-linux-x64
 (
-  set -eu
-  atlas_download_dir=$(mktemp -d)
-  cd "$atlas_download_dir"
-  curl -fLO "https://github.com/DEVxEAZY/atlas-cli/releases/download/v0.1.0/$atlas_asset.tar.gz"
-  curl -fLO "https://github.com/DEVxEAZY/atlas-cli/releases/download/v0.1.0/$atlas_asset.tar.gz.sha256"
-  sha256sum --check "$atlas_asset.tar.gz.sha256"
-  tar -xzf "$atlas_asset.tar.gz"
-  mkdir -p "$HOME/.local/bin"
+  atlas_download_dir=$(mktemp -d) &&
+  cd "$atlas_download_dir" &&
+  curl -fLO "https://github.com/DEVxEAZY/atlas-cli/releases/download/v0.1.0/$atlas_asset.tar.gz" &&
+  curl -fLO "https://github.com/DEVxEAZY/atlas-cli/releases/download/v0.1.0/$atlas_asset.tar.gz.sha256" &&
+  sha256sum --check "$atlas_asset.tar.gz.sha256" &&
+  tar -xzf "$atlas_asset.tar.gz" &&
+  mkdir -p "$HOME/.local/bin" &&
   install -m 0755 "$atlas_asset" "$HOME/.local/bin/atlas"
 ) && export PATH="$HOME/.local/bin:$PATH" && atlas --help
 ```
