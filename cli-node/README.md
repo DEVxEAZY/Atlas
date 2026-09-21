@@ -1,85 +1,90 @@
-# Atlas CLI/TUI (Node — the maintained tool)
+# Atlas development
 
-Opens a runtime (Codex, Claude, Muse) or a shell in the right directory, with
-session history. Stack: Bun + TypeScript + Ink (React), shipped as a **single
-binary** — same idea as `muse`/`claude`, no venv.
+This directory contains the maintained Bun + TypeScript + Ink application.
+For installation and everyday use, start with the [root README](../README.md).
+The Python prototype in `../cli/` is not the development target.
 
-The history file (`~/.local/share/atlas/history.json`) shares its format with
-the Python prototype, so sessions carry over between versions.
+## Run, test, build
 
-## Dev usage
-
-```sh
-cd cli-node
-bun install        # once
-bun run atlas      # open the TUI
-bun test tests/    # 123 tests
-```
-
-## Installing the binary
+From the repository root, with Bun installed (release builds pin 1.4.2):
 
 ```sh
 cd cli-node
-bun run build                  # produces dist/atlas (~100MB, standalone)
-install dist/atlas ~/.local/bin/atlas
+bun install --frozen-lockfile
+bun run atlas
+bun test tests/
+bun run build
 ```
 
-After that, `atlas` works from any directory.
+`bun run build` produces the standalone `dist/atlas` binary for the build
+machine. The [release workflow](../.github/workflows/release.yml) builds
+`bun-linux-x64-baseline` and `bun-linux-arm64`, archives each executable,
+and attaches SHA-256 checksums. The release version lives in `package.json`.
+CI installs with the frozen lockfile, runs the full suite, and builds.
 
-## In the TUI
-
-Home screen (hub): collapsed `▸ Recentes` + `▸ Conversas` + navigable domains.
-Conversations reads the native Claude (`~/.claude`), Codex (`~/.codex`), and
-Muse (`~/.local/share/muse`) stores, grouped by harness — `Enter` resumes the
-conversation in its original runtime (`--resume` / `resume <id>`).
-Sessions with a live agent get an animated indicator, pin to the top, and
-open their sections on their own; `Enter` on them shows the read-only view
-instead of starting a conflicting second instance. Everything alive also
-appears first under `◉ agora` (quick access; the sections keep showing it
-pinned). tmux sessions outside the
-history show up as `◈ sessões tmux`: everything under `atlas-*` (orphans
-included) plus foreign sessions with an agent in a pane — `Enter` attaches,
-double `X` ends them. Conversations under `/tmp` hide by default; the `…`
-row at the end of the section reveals them (live ones always show).
-
-| Screen | Keys |
-|---|---|
-| Hub | `Enter` expand/open/resume · `←→` collapse/expand · `n` new · `r` runtime · `d` remove (refused while running) · `X` twice to kill the row · `/` filter · `q` quit · type to filter |
-| Running session (tmux 𖥠) | `Enter` attach · `r` refresh pane preview · `esc` back · `X` twice to end the session · `↑↓` scroll |
-| Running session (external) | `esc` back without touching the process · `X` twice to really end it · `T` twice to migrate into tmux (convos, background) · `↑↓` scroll the log |
-| Domain / New session | type to filter or paste a path · `Enter` confirm · `esc` back |
-| Runtime | `↑↓` move · `Enter` pick (pre-selects the directory's last runtime) · `esc` back |
-
-`ctrl+c` quits from anywhere. Recents expands the last 10; the filter
-searches all of history. For a deliberate second instance in one directory
-use `n` (New session) — `Enter` on a list never duplicates.
-
-## tmux sessions
-
-Atlas is only the starting point: every session opens inside tmux
-(`atlas-<dir>-<runtime>-<hash>`, visible in `tmux ls`) and the atlas process
-becomes the attach itself via `exec` (same PID) — only the session runs in
-the terminal. Opening Atlas in another terminal shows the sessions marked
-with `𖥠`: `Enter` opens the management view (pane preview via
-`capture-pane`, never interrupting), `Enter` again attaches, `esc` just goes
-back, double `X` ends the tmux session. Inside the session, `prefix + d`
-(Ctrl-b d) detaches without killing. Running Atlas from inside tmux switches
-the current client (`switch-client`) instead of nesting attach. Without tmux
-installed, the session opens directly in the terminal (no cross-terminal
-management).
-
-## Flags (no TUI)
+Tests expect commands named `codex`, `claude`, and `muse` on `PATH`; CI uses
+no-op shims. Tests use fixtures/fake tmux and do not require agent accounts.
+If those commands are absent locally, use temporary shims for tests only:
 
 ```sh
-atlas --list
-atlas --dir ~/repo --runtime codex
-atlas --dir ~/repo --runtime claude --print
+atlas_test_bin=$(mktemp -d)
+for runtime in codex claude muse; do
+  printf '#!/bin/sh\nexit 0\n' > "$atlas_test_bin/$runtime"
+  chmod +x "$atlas_test_bin/$runtime"
+done
+PATH="$atlas_test_bin:$PATH" bun test tests/
 ```
 
-## Data and configuration
+Do not use these shims for interactive agent sessions. See
+[Contributing](../CONTRIBUTING.md) for review expectations.
 
-- History: `~/.local/share/atlas/history.json`
-- `ATLAS_ROOTS`: scanned roots, `:`-separated (default:
-  `~/@development:~/@megavale-repos`)
-- `ATLAS_HISTORY_FILE`: alternate history path
-- `ATLAS_TMUX_BIN`: alternate tmux binary (default: `PATH` lookup)
+## Source map
+
+| File or directory | Responsibility |
+| --- | --- |
+| `src/main.tsx` | CLI arguments, launch planning, process handoff |
+| `src/App.tsx`, `src/screens/` | Screen transitions and Ink UI |
+| `src/components/`, `src/theme.ts` | Shared UI and display conventions |
+| `src/repos.ts`, `src/rows.ts` | Filesystem discovery, grouping, filtering |
+| `src/runtimes.ts` | Runtime availability, launch and resume arguments |
+| `src/history.ts` | Local session history |
+| `src/native/` | Native conversation adapters and previews |
+| `src/tmux.ts`, `src/process.ts` | Session lifecycle and live process discovery |
+| `tests/` | Unit, TUI, process, and stress tests |
+
+## Behavior to preserve
+
+Opening a live row shows a management view; `n` explicitly creates a new
+session. Double `X` confirms termination. Removing running history is refused.
+tmux sessions under `atlas-*`, plus foreign sessions containing agent panes,
+can appear even when absent from Atlas history. Idle foreign shells are omitted.
+
+Outside tmux, attach uses process handoff; inside tmux, Atlas switches the
+current client. Missing tmux falls back to direct runtime launch. Native
+conversations resume through each runtime's own arguments, not a replacement
+conversation store. Keep the shipped UI in pt-BR and launch documentation in
+English unless a localization change is explicitly designed.
+
+External conversation rows also offer double `T` to migrate into tmux in the
+background; verify runtime-specific behavior before changing this path.
+`r` refreshes a tmux preview. `d` removes non-running history entries.
+
+## Data and development isolation
+
+| Setting | Default / purpose |
+| --- | --- |
+| `ATLAS_ROOTS` | Colon-separated roots; default `~/@development:~/@megavale-repos` |
+| `ATLAS_HISTORY_FILE` | Defaults to `~/.local/share/atlas/history.json` |
+| `ATLAS_TMUX_BIN` | Override the tmux executable; default lookup on `PATH` |
+
+Use disposable repositories and an alternate history file for manual checks.
+History isolation alone does not hide native conversations or other tmux
+sessions. Use a separate OS user for clean screenshots or invasive lifecycle
+experiments. Never commit real conversation transcripts, credentials, or
+private repository paths. The history format is shared with the Python
+prototype; preserve compatibility when changing it.
+
+## Launch assets
+
+[Release notes](../docs/releases/v0.1.0.md), [visual sources](../docs/demo/README.md),
+and the [launch kit](../docs/launch/README.md) live outside this directory.

@@ -1,0 +1,39 @@
+name: Feature request
+description: Describe a session-management problem and the outcome you need.
+title: "Feature: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please read https://github.com/DEVxEAZY/atlas-cli/blob/main/ROADMAP.md first.
+        Proposals are discussion inputs, not delivery commitments. Setup questions belong in Discussions.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe a concrete workflow and who is affected, without private project data.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: What would become possible or easier? Include a small example.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives or current workaround
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Environment and constraints
+      description: Relevant platform, runtime, tmux behavior, or compatibility needs.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I checked the roadmap and searched existing issues.
+          required: true
