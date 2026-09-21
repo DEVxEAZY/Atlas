@@ -17,6 +17,7 @@ import {
   HARNESS_LABEL,
   convoDisplay,
   convoExpandLabel,
+  isTmpDir,
   matchConvo,
   matchSession,
   moveIndex,
@@ -98,6 +99,7 @@ type HubRow =
   | { t: "session"; session: Session }
   | { t: "convo"; convo: NativeSession }
   | { t: "expandConvo"; harness: Harness; mode: "more" | "less" | "loading"; total: number }
+  | { t: "toggleTmp" }
   | { t: "tmux"; name: string; runtime: string; dir: string }
   | { t: "domain"; domain: string; repos: number };
 
@@ -291,6 +293,7 @@ export default function Hub({
     convos.some((c) => liveResumes.has(c.id) || tmuxForConvo(c) !== null),
   );
   const [query, setQuery] = useState("");
+  const [showTmp, setShowTmp] = useState(false);
   const [focus, setFocus] = useState<"list" | "filter">("list");
   const [index, indexRef, setIndex] = useLiveIndex(0);
   const [msg, setMsg] = useState("");
@@ -479,7 +482,11 @@ export default function Hub({
     }
     out.push({ t: "toggleConvos" });
     if (showConvos) {
-      const matching = effectiveConvos.filter((c) => matchConvo(c, query));
+      // /tmp convos stay hidden unless asked for — except live ones, which
+      // must stay visible like every other live session
+      const matching = effectiveConvos.filter(
+        (c) => matchConvo(c, query) && (showTmp || !isTmpDir(c.dir) || isConvoLive(c)),
+      );
       if (matching.length === 0) {
         out.push({
           t: "header",
@@ -493,7 +500,13 @@ export default function Hub({
           .filter((c) => c.harness === h)
           .sort((a, b) => b.updatedAt - a.updatedAt);
         if (items.length === 0) continue;
-        const total = totals[h];
+        // totals follow the visible universe: tmp-hidden convos don't count,
+        // so "ver todas" terminally becomes "ver menos" once all visible show
+        const hidden = showTmp
+          ? 0
+          : effectiveConvos.filter((c) => c.harness === h && isTmpDir(c.dir) && !isConvoLive(c))
+              .length;
+        const total = totals[h] - hidden;
         const open = filtering || expandedHarness[h];
         const shown = open ? items : items.slice(0, 12);
         const count = total > shown.length ? `${shown.length} de ${total}` : `${total}`;
@@ -513,6 +526,7 @@ export default function Hub({
           out.push({ t: "expandConvo", harness: h, mode: "less", total });
         }
       }
+      if (effectiveConvos.some((c) => isTmpDir(c.dir))) out.push({ t: "toggleTmp" });
     }
     const matchingStrays = filtering
       ? strays.filter((s) => {
@@ -532,7 +546,7 @@ export default function Hub({
     for (const d of domains) out.push({ t: "domain", domain: d.domain, repos: d.repos });
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessions, effectiveConvos, totals, expandedHarness, loadingHarness, query, filtering, showRecents, showConvos, domains, running, tmuxSessions, strays]);
+  }, [sessions, effectiveConvos, totals, expandedHarness, loadingHarness, query, filtering, showRecents, showConvos, domains, running, liveResumes, tmuxSessions, strays, showTmp]);
 
   useEffect(() => {
     setIndex((prev) => {
@@ -590,6 +604,10 @@ export default function Hub({
         setExpandedHarness((prev) => ({ ...prev, [h]: true }));
         setLoadingHarness((prev) => ({ ...prev, [h]: false }));
       }, 30);
+      return;
+    }
+    if (row.t === "toggleTmp") {
+      setShowTmp((v) => !v);
       return;
     }
     if (row.t === "domain") {
@@ -794,6 +812,15 @@ export default function Hub({
             <ItemRow key={at} hot={hot}>
               <Text color={hot ? theme.highlightFg : undefined} dimColor={!hot}>
                 {`  ${convoExpandLabel(row)}`}
+              </Text>
+            </ItemRow>
+          );
+        }
+        if (row.t === "toggleTmp") {
+          return (
+            <ItemRow key={at} hot={hot}>
+              <Text color={hot ? theme.highlightFg : undefined} dimColor={!hot}>
+                {showTmp ? "  … ocultar conversas de /tmp" : "  … mostrar conversas de /tmp"}
               </Text>
             </ItemRow>
           );

@@ -37,7 +37,8 @@ open their sections on their own; `Enter` on them shows the read-only view
 instead of starting a conflicting second instance. tmux sessions outside the
 history show up as `◈ sessões tmux`: everything under `atlas-*` (orphans
 included) plus foreign sessions with an agent in a pane — `Enter` attaches,
-double `X` ends them.
+double `X` ends them. Conversations under `/tmp` hide by default; the `…`
+row at the end of the section reveals them (live ones always show).
 
 | Screen | Keys |
 |---|---|

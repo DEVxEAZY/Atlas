@@ -161,6 +161,11 @@ export function convoDisplay(c: NativeSession): string {
   return rel || domain;
 }
 
+/** Scratch dirs stay out of Conversas unless asked for. */
+export function isTmpDir(dir: string | null | undefined): boolean {
+  return !!dir && (dir === "/tmp" || dir.startsWith("/tmp/"));
+}
+
 export function matchConvo(c: NativeSession, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;

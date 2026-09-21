@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import App, { type Choice } from "../src/App";
 import DirPicker from "../src/screens/DirPicker";
+import Hub from "../src/screens/Hub";
 import Running from "../src/screens/Running";
 import Runtime from "../src/screens/Runtime";
 import { load, record } from "../src/history";
@@ -191,7 +192,7 @@ describe("tui", () => {
       const id = `aaaaaaaa-0000-4000-8000-${String(i).padStart(12, "0")}`;
       writeFileSync(
         join(slugDir, `${id}.jsonl`),
-        `${JSON.stringify({ type: "user", cwd: `/tmp/wibble-${i}`, message: `wibble-extra-${i}` })}\n`,
+        `${JSON.stringify({ type: "user", cwd: `/home/dev/wibble-${i}`, message: `wibble-extra-${i}` })}\n`,
       );
       const mtime = new Date(now - (13 - i) * 1000);
       utimesSync(join(slugDir, `${id}.jsonl`), mtime, mtime);
@@ -211,10 +212,10 @@ describe("tui", () => {
       await waitFrame(app, (f) => f.includes("Conversas"));
       await key(app, KEY.down); // conversas toggle
       await key(app, KEY.enter); // expand section
-      const top = await waitFrame(app, (f) => f.includes("12 de 15"));
-      expect(top).toContain("12 de 15");
+      const top = await waitFrame(app, (f) => f.includes("12 de 14"));
+      expect(top).toContain("12 de 14");
       await key(app, KEY.down, 13); // scroll to …ver todas row
-      const collapsed = await waitFrame(app, (f) => f.includes("ver todas (15)"));
+      const collapsed = await waitFrame(app, (f) => f.includes("ver todas (14)"));
       expect(collapsed).not.toContain("wibble-extra-0");
       expect(collapsed).not.toContain("arrumar o bug");
       await key(app, KEY.enter); // load full history
@@ -224,15 +225,15 @@ describe("tui", () => {
       expect(expanded).toContain("ver menos");
       expect(expanded).toContain("arrumar o bug");
       expect(expanded).not.toContain("ver todas");
-      await key(app, KEY.down, 3); // ver menos row
+      await key(app, KEY.down, 2); // ver menos row (14 visible: the /tmp convo hides)
       await key(app, KEY.enter); // collapse
       await key(app, KEY.up, 2); // recenter the list window on …ver todas
-      const collapsedAgain = await waitFrame(app, (f) => f.includes("ver todas (15)"));
+      const collapsedAgain = await waitFrame(app, (f) => f.includes("ver todas (14)"));
       expect(collapsedAgain).not.toContain("wibble-extra-0");
       expect(collapsedAgain).not.toContain("arrumar o bug");
       await key(app, KEY.up, 13); // scroll back to the claude header
-      const topAgain = await waitFrame(app, (f) => f.includes("12 de 15"));
-      expect(topAgain).toContain("12 de 15");
+      const topAgain = await waitFrame(app, (f) => f.includes("12 de 14"));
+      expect(topAgain).toContain("12 de 14");
       // filter searches loaded items, not just the capped view
       await key(app, "/");
       await key(app, "arrumar");
@@ -332,6 +333,38 @@ describe("tui", () => {
         /* already dead */
       }
       rmSync(fake, { force: true });
+    }
+  });
+
+  test("hub hides /tmp convos unless toggled", async () => {
+    setupEnv();
+    const fix = join(import.meta.dir, "fixtures");
+    process.env.ATLAS_CLAUDE_HOME = join(fix, "claude");
+    process.env.ATLAS_CODEX_HOME = join(fix, "codex");
+    process.env.ATLAS_MUSE_HOME = join(fix, "muse");
+    const noop = () => {};
+    const app = mount(
+      <Hub domains={[]} onOpen={noop} onViewRunning={noop} onNewSession={noop} onDrill={noop} onQuit={noop} />,
+    );
+    try {
+      await waitFrame(app, (f) => f.includes("Conversas"));
+      await key(app, KEY.down); // convos toggle
+      await key(app, KEY.enter); // expand
+      const hidden = await waitFrame(app, (f) => f.includes("arrumar o bug"));
+      expect(hidden).not.toContain("revisar o deploy"); // the /tmp convo
+      expect(hidden).toContain("mostrar conversas de /tmp");
+      await key(app, KEY.down, 15); // clamp onto the toggle row (last row)
+      await key(app, KEY.enter);
+      const shown = await waitFrame(app, (f) => f.includes("revisar o deploy"));
+      expect(shown).toContain("ocultar conversas de /tmp");
+      await key(app, KEY.down, 15);
+      await key(app, KEY.enter);
+      await waitFrame(
+        app,
+        (f) => !f.includes("revisar o deploy") && f.includes("mostrar conversas de /tmp"),
+      );
+    } finally {
+      app.unmount();
     }
   });
 

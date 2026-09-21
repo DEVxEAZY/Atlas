@@ -9,6 +9,7 @@ import {
   convoRows,
   filterCandidates,
   firstItemIndex,
+  isTmpDir,
   lastItemIndex,
   matchConvo,
   matchSession,
@@ -153,6 +154,16 @@ describe("rows", () => {
       expect(convoDisplay(c)).toBe("proj");
       expect(convoDisplay({ ...c, dir: null })).toBe("—");
     });
+  });
+
+  test("isTmpDir matches scratch dirs only", () => {
+    expect(isTmpDir("/tmp/other")).toBe(true);
+    expect(isTmpDir("/tmp")).toBe(true);
+    expect(isTmpDir("/tmpother")).toBe(false);
+    expect(isTmpDir("/home/dev/proj")).toBe(false);
+    expect(isTmpDir("")).toBe(false);
+    expect(isTmpDir(null)).toBe(false);
+    expect(isTmpDir(undefined)).toBe(false);
   });
 
   test("moveIndex skips headers and clamps", () => {
