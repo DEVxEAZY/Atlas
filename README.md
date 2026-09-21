@@ -9,20 +9,7 @@ pick a runtime (Codex, Claude, Muse, or a plain shell), and Atlas opens it
 inside tmux — then lets you find, enter, peek at, and kill every session
 from one place, in any terminal.
 
-```text
-  Atlas — 2 sessões · 0 conversas
-
-  / filtrar sessões e conversas…  ( digite ou / · esc volta )
-
-  ▸ Recentes · 2
-  ▸ Conversas · nenhuma
-  ◈ sessões tmux  ·  1 sessão
-  ⠴ 𖥠 ▸ shell  atlas-demo-shell-a1b2c3  · ~/demo/demo-api
-    ◆ wd  ·  0 repos
-
-
-  Enter abrir · n nova · r runtime · d remover · X matar · / filtrar · q sair
-```
+![Atlas Hub](docs/atlas-hub.svg)
 
 > The TUI speaks Brazilian Portuguese. This document is in English.
 

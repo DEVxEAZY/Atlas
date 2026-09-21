@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="699" height="391" viewBox="0 0 699 391" font-family="'JetBrains Mono','Fira Code',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="14" role="img" aria-label="Atlas Hub terminal screenshot">
+  <rect width="699" height="391" rx="12" fill="#0D0D0D"/>
+  <rect width="699" height="391" rx="12" fill="none" stroke="#2A2A2A"/>
+  <circle cx="28" cy="20" r="6" fill="#FF5F57"/>
+  <circle cx="48" cy="20" r="6" fill="#FEBC2E"/>
+  <circle cx="68" cy="20" r="6" fill="#28C840"/>
+  <text x="349.5" y="25" text-anchor="middle" fill="#8A8A8A">atlas</text>
+  <line x1="0" y1="40" x2="699" y2="40" stroke="#2A2A2A"/>
+    <text x="26" y="73"><tspan>  </tspan><tspan fill="#FFFFFF" font-weight="bold">Atlas</tspan><tspan fill="#8A8A8A"> — 2 sessões · 0 conversas</tspan></text>
+    <text x="26" y="94"></text>
+    <text x="26" y="115"><tspan>  </tspan><tspan fill="#8A8A8A">/ </tspan><tspan fill="#8A8A8A">filtrar sessões e conversas…  ( digite ou / · esc volta )</tspan></text>
+    <text x="26" y="136"></text>
+    <rect x="42.8" y="141" width="123.60000000000001" height="20" rx="3" fill="#FFB386"/>
+    <text x="26" y="157"><tspan>  </tspan><tspan fill="#000000">▾ Recentes · 2</tspan></text>
+    <text x="26" y="178"><tspan>  </tspan><tspan fill="#8A8A8A">wd  ·  2 sessões</tspan></text>
+    <text x="26" y="199"><tspan>    </tspan><tspan fill="#FFB386">⬢ </tspan><tspan fill="#F8F4EB">codex  demo-api  </tspan><tspan fill="#8A8A8A">· há 3 h · 12x</tspan></text>
+    <text x="26" y="220"><tspan>    </tspan><tspan fill="#FF8F6B">✳ </tspan><tspan fill="#F8F4EB">claude demo-web  </tspan><tspan fill="#8A8A8A">· há 4 h · 5x</tspan></text>
+    <text x="26" y="241"><tspan>  </tspan><tspan fill="#FFB386">▸ Conversas · nenhuma</tspan></text>
+    <text x="26" y="262"><tspan>  </tspan><tspan fill="#FFB386">◈</tspan><tspan fill="#8A8A8A"> sessões tmux  ·  1 sessão</tspan></text>
+    <text x="26" y="283"><tspan>  </tspan><tspan fill="#7EE787">⠴ </tspan><tspan fill="#FFB386">𖥠 </tspan><tspan fill="#8A8A8A">▸ </tspan><tspan fill="#F8F4EB">shell  atlas-demo-shell-a1b2c3  </tspan><tspan fill="#8A8A8A">· ~/demo/demo-api</tspan></text>
+    <text x="26" y="304"><tspan>    </tspan><tspan fill="#FFB386">◆ </tspan><tspan fill="#F8F4EB">wd</tspan><tspan fill="#8A8A8A">  ·  0 repos</tspan></text>
+    <text x="26" y="325"></text>
+    <text x="26" y="346"></text>
+    <text x="26" y="367"><tspan>  </tspan><tspan fill="#FFB386">Enter</tspan><tspan fill="#8A8A8A"> abrir</tspan><tspan fill="#8A8A8A"> · </tspan><tspan fill="#FFB386">n</tspan><tspan fill="#8A8A8A"> nova</tspan><tspan fill="#8A8A8A"> · </tspan><tspan fill="#FFB386">r</tspan><tspan fill="#8A8A8A"> runtime</tspan><tspan fill="#8A8A8A"> · </tspan><tspan fill="#FFB386">d</tspan><tspan fill="#8A8A8A"> remover</tspan><tspan fill="#8A8A8A"> · </tspan><tspan fill="#FFB386">X</tspan><tspan fill="#8A8A8A"> matar</tspan><tspan fill="#8A8A8A"> · </tspan><tspan fill="#FFB386">/</tspan><tspan fill="#8A8A8A"> filtrar</tspan><tspan fill="#8A8A8A"> · </tspan><tspan fill="#FFB386">q</tspan><tspan fill="#8A8A8A"> sair</tspan></text>
+</svg>
