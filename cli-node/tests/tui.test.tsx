@@ -8,7 +8,7 @@ import Hub from "../src/screens/Hub";
 import Running from "../src/screens/Running";
 import Runtime from "../src/screens/Runtime";
 import { load, record } from "../src/history";
-import { runningKeys, runningResumeIds } from "../src/process";
+import { pidsForKey, runningKeys, runningResumeIds } from "../src/process";
 import type { NativeSession } from "../src/native/index";
 import { KEY, LIVE_SPIN_RE, burst, key, mount, sleep, waitFor, waitFrame } from "./ink-helpers";
 
@@ -895,15 +895,20 @@ describe("tui", () => {
     }
   });
 
-  test("migrate key shows for convos only", async () => {
+  test("T T migrates a session via its resume id", async () => {
     const { rootA } = setupEnv();
     const target = join(rootA, "proj");
-    record(target, "codex");
+    const id = "aaaaaaaa-1111-4111-8111-111111111111";
     const fake = join(target, "codex");
     writeFileSync(fake, "#!/bin/sh\nsleep 30\n");
     chmodSync(fake, 0o755);
-    const proc = Bun.spawn([fake], { cwd: target, stdout: "ignore", stderr: "ignore" });
-    let launched: Choice | undefined;
+    const proc = Bun.spawn([fake, "resume", id], {
+      cwd: target,
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    let migrated: Choice | undefined;
+    let backed = false;
     try {
       await waitForLive(proc.pid, `${target}\0codex`);
       const app = mount(
@@ -912,20 +917,129 @@ describe("tui", () => {
             kind: "session",
             session: { dir: target, runtime: "codex", last_used: new Date().toISOString(), uses: 1 },
           }}
-          onBack={() => {}}
+          onBack={() => (backed = true)}
           onQuit={() => {}}
-          onLaunch={(c) => (launched = c)}
+          onLaunch={() => {}}
           onAttach={() => {}}
-          onMigrate={() => ({ ok: true })}
+          onMigrate={(c) => {
+            migrated = c;
+            return { ok: true };
+          }}
         />,
       );
       try {
-        const frame = await waitFrame(app, (f) => f.includes("em execução"));
-        expect(frame).not.toContain("migrar p/ tmux");
+        await waitFrame(app, (f) => f.includes("em execução"));
+        expect(app.lastFrame()).toContain("migrar p/ tmux");
+        await key(app, "T");
+        await waitFrame(app, (f) => f.includes("T de novo"));
+        await key(app, "T");
+        await waitFor(() => migrated !== undefined);
+        expect(migrated).toEqual({ dir: target, runtime: "codex", resume: id });
+        await waitFor(() => {
+          try {
+            process.kill(proc.pid, 0);
+            return false;
+          } catch {
+            return true;
+          }
+        });
+        await waitFor(() => backed);
+      } finally {
+        app.unmount();
+      }
+    } finally {
+      try {
+        proc.kill();
+      } catch {
+        /* already dead */
+      }
+      rmSync(fake, { force: true });
+    }
+  });
+
+  test("T refuses a session without resume id", async () => {
+    const { rootA } = setupEnv();
+    const target = join(rootA, "proj");
+    const fake = join(target, "codex");
+    writeFileSync(fake, "#!/bin/sh\nsleep 30\n");
+    chmodSync(fake, 0o755);
+    const proc = Bun.spawn([fake], { cwd: target, stdout: "ignore", stderr: "ignore" });
+    let migrated: Choice | undefined;
+    let backed = false;
+    try {
+      await waitForLive(proc.pid, `${target}\0codex`);
+      const app = mount(
+        <Running
+          target={{
+            kind: "session",
+            session: { dir: target, runtime: "codex", last_used: new Date().toISOString(), uses: 1 },
+          }}
+          onBack={() => (backed = true)}
+          onQuit={() => {}}
+          onLaunch={() => {}}
+          onAttach={() => {}}
+          onMigrate={(c) => {
+            migrated = c;
+            return { ok: true };
+          }}
+        />,
+      );
+      try {
+        await waitFrame(app, (f) => f.includes("em execução"));
+        expect(app.lastFrame()).toContain("migrar p/ tmux");
+        await key(app, "T");
+        await waitFrame(app, (f) => f.includes("não tem resume id"));
+        expect(app.lastFrame() ?? "").not.toContain("T de novo");
         await key(app, "T");
         await sleep(200);
-        expect(launched).toBeUndefined();
-        expect(app.lastFrame() ?? "").not.toContain("T de novo");
+        expect(migrated).toBeUndefined();
+        expect(backed).toBe(false);
+        expect(() => process.kill(proc.pid, 0)).not.toThrow(); // untouched
+      } finally {
+        app.unmount();
+      }
+    } finally {
+      try {
+        proc.kill();
+      } catch {
+        /* already dead */
+      }
+      rmSync(fake, { force: true });
+    }
+  });
+
+  test("T refuses shell sessions", async () => {
+    const { rootA } = setupEnv();
+    const target = join(rootA, "proj");
+    const fake = join(target, "shell");
+    writeFileSync(fake, "#!/bin/sh\nsleep 30\n");
+    chmodSync(fake, 0o755);
+    const proc = Bun.spawn([fake], { cwd: target, stdout: "ignore", stderr: "ignore" });
+    let migrated: Choice | undefined;
+    try {
+      await waitFor(() => pidsForKey(target, "shell").includes(proc.pid));
+      const app = mount(
+        <Running
+          target={{
+            kind: "session",
+            session: { dir: target, runtime: "shell", last_used: new Date().toISOString(), uses: 1 },
+          }}
+          onBack={() => {}}
+          onQuit={() => {}}
+          onLaunch={() => {}}
+          onAttach={() => {}}
+          onMigrate={(c) => {
+            migrated = c;
+            return { ok: true };
+          }}
+        />,
+      );
+      try {
+        await waitFrame(app, (f) => f.includes("em execução"));
+        await key(app, "T");
+        await waitFrame(app, (f) => f.includes("não tem conversa"));
+        expect(migrated).toBeUndefined();
+        expect(() => process.kill(proc.pid, 0)).not.toThrow();
       } finally {
         app.unmount();
       }

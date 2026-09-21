@@ -30,12 +30,15 @@ import { ago, shorten } from "../util";
 import { RUNTIME_COLOR, RUNTIME_ICON, TMUX_MARK, theme } from "../theme";
 import {
   TMUX_PREFIX,
+  buildTmuxFallback,
   hasSession,
   killSession,
   listAtlasSessions,
   listTmuxPanes,
   matchAtlasSession,
+  matchAtlasSessionDeep,
   tmuxBaseName,
+  type TmuxFallback,
   type TmuxPane,
   type TmuxSession,
 } from "../tmux";
@@ -53,11 +56,14 @@ import {
 import { useLiveIndex } from "../components/useLiveIndex";
 import { useSpinner } from "../components/useSpinner";
 import {
+  keysForAgents,
   pidsForKey,
   pidsForResume,
+  resumeIdsForAgents,
   runningKeys,
   runningResumeIds,
   runtimeForCommand,
+  scanAgents,
   terminatePids,
 } from "../process";
 import type { Choice } from "../App";
@@ -223,7 +229,13 @@ function sameSet(a: Set<string>, b: Set<string>): boolean {
 function samePanes(a: TmuxPane[], b: TmuxPane[]): boolean {
   return (
     a.length === b.length &&
-    a.every((p, i) => p.session === b[i].session && p.command === b[i].command && p.path === b[i].path)
+    a.every(
+      (p, i) =>
+        p.session === b[i].session &&
+        p.command === b[i].command &&
+        p.path === b[i].path &&
+        p.tty === b[i].tty,
+    )
   );
 }
 
@@ -232,6 +244,14 @@ function sameTmux(a: Map<string, TmuxSession>, b: Map<string, TmuxSession>): boo
     a.size === b.size &&
     [...a].every(([k, s]) => b.get(k)?.attached === s.attached)
   );
+}
+
+function sameStrMap(a: Map<string, string>, b: Map<string, string>): boolean {
+  return a.size === b.size && [...a].every(([k, v]) => b.get(k) === v);
+}
+
+function sameFallback(a: TmuxFallback, b: TmuxFallback): boolean {
+  return sameStrMap(a.byKey, b.byKey) && sameStrMap(a.byResume, b.byResume);
 }
 
 export default function Hub({
@@ -267,23 +287,34 @@ export default function Hub({
   const [liveResumes, setLiveResumes] = useState(() => runningResumeIds());
   const [tmuxSessions, setTmuxSessions] = useState(() => listAtlasSessions());
   const [tmuxPanes, setTmuxPanes] = useState(() => listTmuxPanes());
+  const [fallbackTmux, setFallbackTmux] = useState(() =>
+    buildTmuxFallback(scanAgents(), listTmuxPanes()),
+  );
   useEffect(() => {
     const t = setInterval(() => {
-      const nextRunning = runningKeys();
+      // one /proc walk feeds every live index (keys, resumes, tmux links)
+      const agents = scanAgents();
+      const nextRunning = keysForAgents(agents);
       setRunning((prev) => (sameSet(nextRunning, prev) ? prev : nextRunning));
-      const nextResumes = runningResumeIds();
+      const nextResumes = resumeIdsForAgents(agents);
       setLiveResumes((prev) => (sameSet(nextResumes, prev) ? prev : nextResumes));
       const nextTmux = listAtlasSessions();
       setTmuxSessions((prev) => (sameTmux(nextTmux, prev) ? prev : nextTmux));
       const nextPanes = listTmuxPanes();
       setTmuxPanes((prev) => (samePanes(nextPanes, prev) ? prev : nextPanes));
+      const nextFallback = buildTmuxFallback(agents, nextPanes);
+      setFallbackTmux((prev) => (sameFallback(nextFallback, prev) ? prev : nextFallback));
     }, 2000);
     return () => clearInterval(t);
   }, []);
   const tmuxForSession = (s: Session): string | null =>
-    matchAtlasSession(tmuxSessions, tmuxBaseName(s.dir, s.runtime));
+    matchAtlasSessionDeep(tmuxSessions, tmuxBaseName(s.dir, s.runtime)) ??
+    fallbackTmux.byKey.get(`${s.dir}\0${s.runtime}`) ??
+    null;
   const tmuxForConvo = (c: NativeSession): string | null =>
-    matchAtlasSession(tmuxSessions, tmuxBaseName(c.dir ?? homedir(), c.harness, c.id));
+    matchAtlasSession(tmuxSessions, tmuxBaseName(c.dir ?? homedir(), c.harness, c.id)) ??
+    fallbackTmux.byResume.get(c.id) ??
+    null;
   // recents open on their own when one of them is actually running
   const [expandedRecents, setExpandedRecents] = useState(() =>
     sessions.some(
@@ -346,10 +377,13 @@ export default function Hub({
   };
 
   const refreshLive = (): void => {
-    setRunning(runningKeys());
-    setLiveResumes(runningResumeIds());
+    const agents = scanAgents();
+    setRunning(keysForAgents(agents));
+    setLiveResumes(resumeIdsForAgents(agents));
     setTmuxSessions(listAtlasSessions());
-    setTmuxPanes(listTmuxPanes());
+    const panes = listTmuxPanes();
+    setTmuxPanes(panes);
+    setFallbackTmux(buildTmuxFallback(agents, panes));
   };
 
   /** Kill what a row points at (tmux session wins over bare processes),

@@ -24,15 +24,17 @@ itself, not an SSH client: no connections to configure.
   to the top with an animated indicator.
 - **Native conversations** — reads the Claude/Codex/Muse stores and resumes
   conversations in their original runtime.
-- **tmux-backed sessions** — every launch runs as `atlas-<dir>-<runtime>-<hash>`.
+- **tmux-backed sessions** — every launch runs as `atlas-<dir>-<runtime>-<hash>[-r<resume>]`.
   From any other terminal, Atlas lists it (marked `𖥠`), shows a read-only
   pane preview, attaches to it, or kills it. Attach uses `exec` (same PID),
   so the client is never orphaned; nested runs use `switch-client`.
 - **Unmanaged tmux section** — orphaned `atlas-*` sessions plus foreign
   sessions with an agent in a pane show up as `◈ sessões tmux`, with the
-  same view/attach/kill gestures. Idle foreign shells stay out of the way.
+  same view/attach/kill gestures. Foreign sessions linked to a row mark it
+  `𖥠` instead. Idle foreign shells stay out of the way.
 - **Live first** — everything running shows under `◉ agora` at the top;
-  external convos migrate into tmux in the background with double `T`.
+  external sessions migrate into tmux in the background with double `T`
+  (needs a resume id; refuses with guidance otherwise).
 - **Safe kills** — destructive keys arm on first press and act on second;
   removing a running session from history is refused with guidance.
 - **Single binary** — `bun build --compile`, no venv, no runtime to install.
@@ -56,7 +58,7 @@ atlas                          # open the TUI
 |---|---|
 | Hub | `Enter` expand/open/resume · `←→` collapse/expand · `n` new · `r` runtime · `d` remove (refused while running) · `X` twice to kill the row · `/` filter · `q` quit · type to filter |
 | Running session (tmux 𖥠) | `Enter` attach · `r` refresh pane preview · `esc` back · `X` twice to end the session · `↑↓` scroll |
-| Running session (external) | `esc` back without touching the process · `X` twice to really end it · `T` twice to migrate into tmux (convos, background) · `↑↓` scroll the log |
+| Running session (external) | `esc` back without touching the process · `X` twice to really end it · `T` twice to migrate into tmux (background; needs a resume id) · `↑↓` scroll the log |
 | Domain / New session | type to filter or paste a path · `Enter` confirm · `esc` back |
 | Runtime | `↑↓` move · `Enter` pick (pre-selects the directory's last runtime) · `esc` back |
 

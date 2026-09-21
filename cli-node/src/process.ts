@@ -99,6 +99,23 @@ export function scanAgents(
   return out;
 }
 
+/** "dir\0bin" keys for an agent list (one /proc walk feeds every index). */
+export function keysForAgents(agents: AgentProc[]): Set<string> {
+  const out = new Set<string>();
+  for (const a of agents) out.add(`${a.dir}\0${a.bin}`);
+  return out;
+}
+
+/** Resume ids referenced by an agent list. */
+export function resumeIdsForAgents(agents: AgentProc[]): Set<string> {
+  const out = new Set<string>();
+  for (const a of agents) {
+    const id = resumeIdFromArgv(a.argv);
+    if (id) out.add(id);
+  }
+  return out;
+}
+
 /** Map of dir -> harness names with a live process there.
  *  Records the wanted runtime name (so `muse-bin-1.3` counts as `muse`).
  *  Pass custom names (e.g. ["sleep"]) in tests. */
@@ -115,13 +132,9 @@ export function scanProcesses(
   return out;
 }
 
-/** "dir\\0runtime" keys for history sessions with a live agent process. */
+/** "dir\0runtime" keys for history sessions with a live agent process. */
 export function runningKeys(names: readonly string[] = HARNESS_BINS): Set<string> {
-  const out = new Set<string>();
-  for (const [dir, bins] of scanProcesses(names)) {
-    for (const b of bins) out.add(`${dir}\0${b}`);
-  }
-  return out;
+  return keysForAgents(scanAgents(names));
 }
 
 /** PIDs of live agents for one history key. */
@@ -155,12 +168,7 @@ export function runningResumeIds(
   names: readonly string[] = HARNESS_BINS,
   procRoot: string = "/proc",
 ): Set<string> {
-  const out = new Set<string>();
-  for (const a of scanAgents(names, procRoot)) {
-    const id = resumeIdFromArgv(a.argv);
-    if (id) out.add(id);
-  }
-  return out;
+  return resumeIdsForAgents(scanAgents(names, procRoot));
 }
 
 /** PIDs currently holding one resume id. */
@@ -174,10 +182,34 @@ export function pidsForResume(
     .map((a) => a.pid);
 }
 
+/** Distinct resume ids held by pids, from their argv (empty = none held). */
+export function resumeIdsForPids(pids: number[], procRoot: string = "/proc"): string[] {
+  if (pids.length === 0) return [];
+  const wanted = new Set(pids);
+  const ids = new Set<string>();
+  for (const a of scanAgents(HARNESS_BINS, procRoot)) {
+    if (!wanted.has(a.pid)) continue;
+    const id = resumeIdFromArgv(a.argv);
+    if (id) ids.add(id);
+  }
+  return [...ids];
+}
+
 /** Start time of a pid (ms epoch) via /proc mtime; null when unknown. */
 export function procStartedAt(pid: number, procRoot: string = "/proc"): number | null {
   try {
     return statSync(join(procRoot, String(pid))).mtimeMs;
+  } catch {
+    return null;
+  }
+}
+
+/** Controlling terminal of a pid via fd 0 (`/dev/pts/N`), if readable.
+ *  Matches `pane_tty` from tmux: the link between a process and the
+ *  (possibly foreign-named) tmux session holding it. */
+export function ttyForPid(pid: number, procRoot: string = "/proc"): string | null {
+  try {
+    return readlinkSync(join(procRoot, String(pid), "fd", "0"));
   } catch {
     return null;
   }

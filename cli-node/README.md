@@ -39,14 +39,16 @@ appears first under `◉ agora` (quick access; the sections keep showing it
 pinned). tmux sessions outside the
 history show up as `◈ sessões tmux`: everything under `atlas-*` (orphans
 included) plus foreign sessions with an agent in a pane — `Enter` attaches,
-double `X` ends them. Conversations under `/tmp` hide by default; the `…`
+double `X` ends them. A foreign session linked to a history row or a live
+conversation marks that row `𖥠` instead of listing twice. Conversations under
+`/tmp` hide by default; the `…`
 row at the end of the section reveals them (live ones always show).
 
 | Screen | Keys |
 |---|---|
 | Hub | `Enter` expand/open/resume · `←→` collapse/expand · `n` new · `r` runtime · `d` remove (refused while running) · `X` twice to kill the row · `/` filter · `q` quit · type to filter |
 | Running session (tmux 𖥠) | `Enter` attach · `r` refresh pane preview · `esc` back · `X` twice to end the session · `↑↓` scroll |
-| Running session (external) | `esc` back without touching the process · `X` twice to really end it · `T` twice to migrate into tmux (convos, background) · `↑↓` scroll the log |
+| Running session (external) | `esc` back without touching the process · `X` twice to really end it · `T` twice to migrate into tmux (background; needs a resume id) · `↑↓` scroll the log |
 | Domain / New session | type to filter or paste a path · `Enter` confirm · `esc` back |
 | Runtime | `↑↓` move · `Enter` pick (pre-selects the directory's last runtime) · `esc` back |
 
@@ -57,7 +59,7 @@ use `n` (New session) — `Enter` on a list never duplicates.
 ## tmux sessions
 
 Atlas is only the starting point: every session opens inside tmux
-(`atlas-<dir>-<runtime>-<hash>`, visible in `tmux ls`) and the atlas process
+(`atlas-<dir>-<runtime>-<hash>[-r<resume>]`, visible in `tmux ls`) and the atlas process
 becomes the attach itself via `exec` (same PID) — only the session runs in
 the terminal. Opening Atlas in another terminal shows the sessions marked
 with `𖥠`: `Enter` opens the management view (pane preview via
