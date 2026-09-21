@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="700" viewBox="0 0 1100 700" xml:space="preserve" font-family="DejaVu Sans Mono,monospace" role="img" aria-label="Em outro terminal, rode atlas.">
+<title>Em outro terminal, rode atlas.</title><defs>
+    <!-- Hand-drawn vector equivalent of TMUX_MARK (𖥠, U+16960).
+         Bamum Supplement is absent from common terminal/web fallback fonts. -->
+    <g id="tmux-mark" aria-label="𖥠">
+      <circle cx="10" cy="10" r="4.2" fill="none" stroke="currentColor" stroke-width="1.1"/>
+      <path d="M10 2V18M2 10H18" stroke="currentColor" stroke-width="1.1"/>
+      <circle cx="10" cy="2" r="1.2"/><circle cx="10" cy="18" r="1.2"/>
+      <circle cx="2" cy="10" r="1.2"/><circle cx="18" cy="10" r="1.2"/>
+    </g>
+  </defs><rect width="1100" height="700" fill="#000000"/><text style="white-space:pre" x="50" y="43" fill="#FFB386" font-size="16" letter-spacing="1">03 / 06 · ABRIR O HUB</text>
+<text style="white-space:pre" x="48" y="100" fill="#FFFFFF" font-size="35" font-family="DejaVu Sans,sans-serif" font-weight="bold">Em outro terminal, rode atlas.</text>
+<g transform="translate(50 133)"><rect x="1" y="1" width="998" height="468" rx="14" fill="#0D0D0D" stroke="#2A2A2A"/><text style="white-space:pre" x="28" y="30" fill="#8A8A8A" font-size="16" >terminal 2 · ~</text><path d="M1 47H999" stroke="#2A2A2A"/>
+<text style="white-space:pre" x="32" y="112" fill="#8A8A8A" font-size="25" >~ $</text><text style="white-space:pre" x="98" y="112" fill="#F8F4EB" font-size="25" >atlas</text>
+<rect x="178" y="89" width="12" height="28" fill="#FFB386"/></g>
+<text style="white-space:pre" x="50" y="645" fill="#F8F4EB" font-size="21" >Outro terminal. A mesma máquina. Suas sessões continuam vivas.</text>
+<rect x="50" y="677" width="154" height="3" fill="#FFB386"/>
+<rect x="218" y="677" width="154" height="3" fill="#FFB386"/>
+<rect x="386" y="677" width="154" height="3" fill="#FFB386"/>
+<rect x="554" y="677" width="154" height="3" fill="#2A2A2A"/>
+<rect x="722" y="677" width="154" height="3" fill="#2A2A2A"/>
+<rect x="890" y="677" width="154" height="3" fill="#2A2A2A"/>
+</svg>
