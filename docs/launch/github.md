@@ -20,20 +20,19 @@ https://github.com/DEVxEAZY/atlas-cli#readme
 Topics (exact set):
 
 ```text
-atlas-cli
 cli
 tui
 terminal
 tmux
-coding-agents
-codex
-claude
-muse
 session-manager
 developer-tools
-linux
-typescript
+coding-agents
+codex
+claude-code
 bun
+typescript
+ink
+linux
 ```
 
 Keep Issues and Discussions enabled. Enable private vulnerability reporting

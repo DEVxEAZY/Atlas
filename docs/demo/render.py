@@ -36,7 +36,7 @@ def run(*args):
 def render(chrome, source, target, profile):
     root = ET.parse(source).getroot()
     width, height = int(root.attrib["width"]), int(root.attrib["height"])
-    run(chrome, "--no-sandbox", "--disable-gpu", "--hide-scrollbars",
+    run(chrome, "--headless", "--no-sandbox", "--disable-gpu", "--hide-scrollbars",
         "--force-device-scale-factor=1", "--disable-lcd-text",
         "--font-render-hinting=none", "--no-first-run",
         "--run-all-compositor-stages-before-draw",
