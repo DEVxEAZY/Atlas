@@ -1,6 +1,6 @@
-# Atlas
+# Atlas CLI
 
-[![CI](https://github.com/DEVxEAZY/Atlas/actions/workflows/ci.yml/badge.svg)](https://github.com/DEVxEAZY/Atlas/actions/workflows/ci.yml)
+[![CI](https://github.com/DEVxEAZY/atlas-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/DEVxEAZY/atlas-cli/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Bun](https://img.shields.io/badge/runtime-Bun-black?logo=bun)](https://bun.sh)
 
@@ -36,8 +36,8 @@ from one place, in any terminal.
 Prerequisites: [Bun](https://bun.sh) and [tmux](https://github.com/tmux/tmux).
 
 ```sh
-git clone https://github.com/DEVxEAZY/Atlas.git
-cd Atlas/cli-node
+git clone https://github.com/DEVxEAZY/atlas-cli.git
+cd atlas-cli/cli-node
 bun install
 bun run build                  # produces dist/atlas (~100MB, standalone)
 install dist/atlas ~/.local/bin/atlas

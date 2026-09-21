@@ -1,5 +1,5 @@
 {
-  "name": "atlas-cli-node",
+  "name": "atlas-cli",
   "version": "0.1.0",
   "description": "Atlas CLI/TUI port (Node): open coding-agent sessions in the right directory.",
   "type": "module",
