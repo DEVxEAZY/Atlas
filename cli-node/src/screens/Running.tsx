@@ -22,6 +22,8 @@ interface Props {
   onQuit: () => void;
   onLaunch: (c: Choice) => void;
   onAttach: (c: Choice) => void;
+  /** Background migrate into tmux (never attaches); App pops to Hub on ok. */
+  onMigrate: (c: Choice) => { ok: boolean; error?: string };
 }
 
 interface ProcInfo {
@@ -40,7 +42,7 @@ function resolveProcs(t: RunningTarget): ProcInfo[] {
   });
 }
 
-export default function Running({ target, onBack, onQuit, onLaunch, onAttach }: Props) {
+export default function Running({ target, onBack, onQuit, onLaunch, onAttach, onMigrate }: Props) {
   const tmux = target.tmux ?? null;
   const [procs] = useState<ProcInfo[]>(() => resolveProcs(target));
   const [tmuxAlive, setTmuxAlive] = useState(() => (tmux ? hasSession(tmux) : true));
@@ -113,20 +115,24 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach }: 
     setMsg(`não consegui encerrar o PID ${result.alive.join(", ")} — sem permissão?`);
   };
 
-  /** Move an external convo under tmux: its pid(s) must die first (a
-   *  duplicate resume corrupts the session), then the same conversation
-   *  relaunches inside tmux. Aborts if anything stays alive. */
+  /** Move an external convo under tmux, staying in Atlas: its pid(s) must
+   *  die first (a duplicate resume corrupts the session), then the same
+   *  conversation relaunches detached. Aborts if anything stays alive. */
   const migrate = async () => {
     if (target.kind !== "convo" || killing) return;
     setKilling(true);
     try {
       const fresh = pidsForResume(target.convo.id);
-      const relaunch = () =>
-        onLaunch({
+      const relaunch = () => {
+        const r = onMigrate({
           dir: target.convo.dir ?? homedir(),
           runtime: target.convo.harness,
           resume: target.convo.id,
         });
+        // back to Hub on success: fresh lists show the 𖥠 immediately
+        if (!r.ok) setMsg(r.error ?? "não consegui criar a sessão tmux.");
+        else onBack();
+      };
       if (fresh.length === 0) {
         relaunch(); // died on its own: revive straight into tmux
         return;
@@ -207,7 +213,7 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach }: 
       setArmed(false);
       if (!armedMigrate) {
         setArmedMigrate(true);
-        setMsg("T de novo para migrar para o tmux (encerra aqui, retoma a mesma conversa lá).");
+        setMsg("T de novo para migrar para o tmux (encerra aqui, continua lá em 2º plano).");
       } else {
         setArmedMigrate(false);
         void migrate();

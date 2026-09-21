@@ -53,8 +53,7 @@ describe("tmux-managed sessions", () => {
       // marked live row, auto-expanded (tmux counts as running)
       const marked = await waitFrame(app, (f) => f.includes(TMUX_MARK));
       expect(marked).toContain("proj");
-      await key(app, KEY.down); // the tmux-live session row
-      await key(app, KEY.enter); // manage view
+      await key(app, KEY.enter); // snap sits on the agora row: manage view
       const view = await waitFrame(app, (f) => f.includes(`Sessão em execução · ${name}`));
       expect(view).toContain(TMUX_MARK);
       expect(view).toContain("agente digitando…");
@@ -66,8 +65,7 @@ describe("tmux-managed sessions", () => {
       // back out, refresh the pane, then kill the session for real
       await key(app, KEY.esc);
       await waitFrame(app, (f) => f.includes("Recentes"));
-      await key(app, KEY.down);
-      await key(app, KEY.enter);
+      await key(app, KEY.enter); // snap sits on the agora row
       await waitFrame(app, (f) => f.includes(`Sessão em execução · ${name}`));
       writeFakePane(fake, ["nova leitura do painel"]);
       await key(app, "r");
@@ -92,8 +90,7 @@ describe("tmux-managed sessions", () => {
     const app = mount(<App onDone={() => {}} />);
     try {
       await waitFrame(app, (f) => f.includes(TMUX_MARK));
-      await key(app, KEY.down); // the tmux-live session row
-      await key(app, "X");
+      await key(app, "X"); // snap sits on the agora row
       await waitFrame(app, (f) => f.includes("X de novo"));
       await key(app, "X");
       await waitFrame(app, (f) => f.includes("encerrada") && !f.includes(TMUX_MARK));
@@ -113,8 +110,7 @@ describe("tmux-managed sessions", () => {
     const app = mount(<App onDone={() => {}} />);
     try {
       await waitFrame(app, (f) => f.includes(TMUX_MARK));
-      await key(app, KEY.down);
-      await key(app, "d");
+      await key(app, "d"); // snap sits on the agora row
       await waitFrame(app, (f) => f.includes("X encerra antes de remover"));
       expect(load()).toHaveLength(1);
       expect(fakeCalls(fake)).not.toContain(`kill-session -t ${name}`);

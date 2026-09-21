@@ -1,6 +1,15 @@
 /** Small display helpers (UI-free so tests stay light). */
 
+import { statSync } from "node:fs";
 import { homedir } from "node:os";
+
+export function isDir(path: string): boolean {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
 
 /** PT-BR relative time, e.g. 'agora', 'há 5 min', 'há 3 h'. Accepts +00:00 and Z. */
 export function ago(iso: string, now: Date = new Date()): string {

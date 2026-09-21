@@ -34,7 +34,9 @@ Muse (`~/.local/share/muse`) stores, grouped by harness — `Enter` resumes the
 conversation in its original runtime (`--resume` / `resume <id>`).
 Sessions with a live agent get an animated indicator, pin to the top, and
 open their sections on their own; `Enter` on them shows the read-only view
-instead of starting a conflicting second instance. tmux sessions outside the
+instead of starting a conflicting second instance. Everything alive also
+appears first under `◉ agora` (quick access; the sections keep showing it
+pinned). tmux sessions outside the
 history show up as `◈ sessões tmux`: everything under `atlas-*` (orphans
 included) plus foreign sessions with an agent in a pane — `Enter` attaches,
 double `X` ends them. Conversations under `/tmp` hide by default; the `…`
@@ -44,7 +46,7 @@ row at the end of the section reveals them (live ones always show).
 |---|---|
 | Hub | `Enter` expand/open/resume · `←→` collapse/expand · `n` new · `r` runtime · `d` remove (refused while running) · `X` twice to kill the row · `/` filter · `q` quit · type to filter |
 | Running session (tmux 𖥠) | `Enter` attach · `r` refresh pane preview · `esc` back · `X` twice to end the session · `↑↓` scroll |
-| Running session (external) | `esc` back without touching the process · `X` twice to really end it · `T` twice to migrate into tmux (convos) · `↑↓` scroll the log |
+| Running session (external) | `esc` back without touching the process · `X` twice to really end it · `T` twice to migrate into tmux (convos, background) · `↑↓` scroll the log |
 | Domain / New session | type to filter or paste a path · `Enter` confirm · `esc` back |
 | Runtime | `↑↓` move · `Enter` pick (pre-selects the directory's last runtime) · `esc` back |
 

@@ -1,12 +1,11 @@
 /** Atlas launcher: resolve (directory, runtime) then hand the terminal to it. */
 
 import React from "react";
-import { existsSync, statSync, writeSync } from "node:fs";
-import { which } from "bun";
+import { existsSync, writeSync } from "node:fs";
 import { render } from "ink";
 import App, { type Choice } from "./App";
 import { load, record } from "./history";
-import { getRuntime } from "./runtimes";
+import { buildArgv } from "./runtimes";
 import {
   execArgv,
   hasSession,
@@ -15,31 +14,7 @@ import {
   tmuxBin,
   type LaunchPlan,
 } from "./tmux";
-import { ago, shorten } from "./util";
-
-function isDir(path: string): boolean {
-  try {
-    return statSync(path).isDirectory();
-  } catch {
-    return false;
-  }
-}
-
-export function buildArgv(runtime: string, resume?: string): string[] {
-  const def = getRuntime(runtime);
-  if (def.name === "shell") return [process.env.SHELL ?? "/bin/sh"];
-  const bin = which(def.argv[0]);
-  if (!bin) {
-    console.error(`atlas: runtime '${runtime}' não encontrado no PATH.`);
-    process.exit(2);
-  }
-  if (resume) {
-    if (def.name === "codex") return [bin, "resume", resume];
-    if (def.name === "muse") return [bin, "resume", resume];
-    return [bin, "--resume", resume];
-  }
-  return [bin, ...def.argv.slice(1)];
-}
+import { ago, isDir, shorten } from "./util";
 
 export interface LaunchOpts {
   dryRun?: boolean;

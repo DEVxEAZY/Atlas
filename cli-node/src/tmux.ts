@@ -8,6 +8,8 @@ import { createHash } from "node:crypto";
 import { basename } from "node:path";
 import { which } from "bun";
 import { dlopen, FFIType, ptr, type Pointer } from "bun:ffi";
+import { buildArgv, getRuntime, isAvailable } from "./runtimes";
+import { isDir } from "./util";
 
 export const TMUX_PREFIX = "atlas-";
 const MAX_SUFFIX = 9;
@@ -131,6 +133,59 @@ export function listTmuxPanes(): TmuxPane[] {
   } catch {
     return [];
   }
+}
+
+export interface DetachedLaunch {
+  ok: boolean;
+  name?: string;
+  error?: string;
+}
+
+/** Create a tmux session and leave it detached (background migrate): never
+ *  records history, never attaches. Reuses the session when it exists. */
+export function launchDetached(dir: string, runtime: string, resume?: string): DetachedLaunch {
+  if (!isDir(dir)) return { ok: false, error: `diretório não existe: ${dir}` };
+  let def;
+  try {
+    def = getRuntime(runtime);
+  } catch {
+    return { ok: false, error: `runtime desconhecido: ${runtime}` };
+  }
+  if (!isAvailable(def)) {
+    return { ok: false, error: `runtime '${runtime}' não encontrado no PATH.` };
+  }
+  const bin = tmuxBin();
+  if (!bin) return { ok: false, error: "tmux não instalado — a migração precisa do tmux." };
+  let plan;
+  try {
+    plan = planLaunch({
+      dir,
+      runtime,
+      argv: buildArgv(runtime, resume),
+      resume,
+      fresh: false,
+      tmux: true,
+      nested: false,
+      exists: hasSession,
+      tmuxBin: bin,
+    });
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+  if (plan.mode === "tmux-attach") return { ok: true, name: plan.name };
+  if (plan.mode !== "tmux-new" || !plan.createArgv || !plan.name) {
+    return { ok: false, error: "não consegui planejar a sessão tmux." };
+  }
+  let createdExit = -1;
+  try {
+    createdExit = Bun.spawnSync(plan.createArgv, { env: liveEnv() }).exitCode;
+  } catch {
+    /* bad binary: handled below */
+  }
+  if (createdExit !== 0 && !hasSession(plan.name)) {
+    return { ok: false, error: `não consegui criar a sessão tmux '${plan.name}'.` };
+  }
+  return { ok: true, name: plan.name };
 }
 
 /** Live Atlas sessions by name; empty when tmux is missing or has no server. */

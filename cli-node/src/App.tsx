@@ -4,6 +4,7 @@ import Hub from "./screens/Hub";
 import DirPicker from "./screens/DirPicker";
 import Running, { type RunningTarget } from "./screens/Running";
 import Runtime from "./screens/Runtime";
+import { launchDetached } from "./tmux";
 
 export interface Choice {
   dir: string;
@@ -73,6 +74,7 @@ export default function App({ onDone }: { onDone: (c: Choice | null) => void }) 
         onQuit={() => onDone(null)}
         onLaunch={(c) => onDone(c)}
         onAttach={(c) => onDone(c)}
+        onMigrate={(c) => launchDetached(c.dir, c.runtime, c.resume)}
       />
     );
   }

@@ -369,6 +369,57 @@ describe("tui", () => {
     }
   });
 
+  test("hub shows live items in agora first", async () => {
+    const { rootA } = setupEnv();
+    const target = join(rootA, "nowproj");
+    mkdirSync(target, { recursive: true });
+    record(target, "codex");
+    const fix = join(import.meta.dir, "fixtures");
+    process.env.ATLAS_CLAUDE_HOME = join(fix, "claude");
+    process.env.ATLAS_CODEX_HOME = join(fix, "codex");
+    process.env.ATLAS_MUSE_HOME = join(fix, "muse");
+    const fake = join(target, "codex");
+    writeFileSync(fake, "#!/bin/sh\nsleep 30\n");
+    chmodSync(fake, 0o755);
+    const proc = Bun.spawn([fake], { cwd: target, stdout: "ignore", stderr: "ignore" });
+    const id = "11111111-1111-1111-1111-111111111111";
+    const fakeResume = join(target, "muse");
+    writeFileSync(fakeResume, "#!/bin/sh\nsleep 30\n");
+    chmodSync(fakeResume, 0o755);
+    const resumeProc = Bun.spawn([fakeResume, "resume", id], {
+      cwd: target,
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    await waitForLive(proc.pid, `${target}\0codex`);
+    await waitFor(() => runningResumeIds().has(id));
+    const app = mount(<App onDone={() => {}} />);
+    try {
+      const frame = await waitFrame(app, (f) => f.includes("◉ agora"));
+      expect(frame).toContain("◉ agora  ·  2");
+      // quick access duplicates: live rows show in agora and in their section
+      expect(frame.split("nowproj").length - 1).toBe(2);
+      expect(frame.split("arrumar o bug").length - 1).toBe(2);
+      // cursor lands on the first live row: Enter opens it without moving
+      await key(app, KEY.enter);
+      await waitFrame(app, (f) => f.includes("Sessão em execução"));
+    } finally {
+      app.unmount();
+      try {
+        proc.kill();
+      } catch {
+        /* already dead */
+      }
+      try {
+        resumeProc.kill();
+      } catch {
+        /* already dead */
+      }
+      rmSync(fake, { force: true });
+      rmSync(fakeResume, { force: true });
+    }
+  });
+
   test("hub kills a live process row with X X", async () => {
     const { rootA } = setupEnv();
     const target = join(rootA, "proj");
@@ -382,7 +433,7 @@ describe("tui", () => {
     const app = mount(<App onDone={() => {}} />);
     try {
       await waitFrame(app, (f) => f.includes("proj"));
-      await key(app, KEY.down); // the live session row
+      // snap lands on the agora row: no Down needed
       await key(app, "X");
       await waitFrame(app, (f) => f.includes("X de novo"));
       await key(app, "X");
@@ -523,8 +574,7 @@ describe("tui", () => {
       try {
         // auto-expanded on the live session; enter peeks instead of spawning
         await waitFrame(app, (f) => f.includes("proj"));
-        await key(app, KEY.down); // session row
-        await key(app, KEY.enter);
+        await key(app, KEY.enter); // snap sits on the agora row
         const view = await waitFrame(app, (f) => f.includes("em execução"));
         expect(view).toContain(`PID ${proc.pid}`);
         expect(view).toContain("voltar sem matar");
@@ -563,8 +613,7 @@ describe("tui", () => {
       const app = mount(<App onDone={() => {}} />);
       try {
         await waitFrame(app, (f) => f.includes("proj") && f.includes("other"));
-        await key(app, KEY.down);
-        await key(app, KEY.enter);
+        await key(app, KEY.enter); // snap sits on the agora row
         await waitFrame(app, (f) => f.includes("em execução"));
         await key(app, "X");
         await waitFrame(app, (f) => f.includes("de novo")); // arm confirmation
@@ -625,8 +674,7 @@ describe("tui", () => {
         );
         expect(filtered).toContain("1 resultado");
         expect(filtered).toMatch(LIVE_SPIN_RE); // live convo spins
-        await key(app, KEY.up, 4); // clamp to the top, then down to the convo row
-        await key(app, KEY.down, 2);
+        await key(app, KEY.up, 4); // clamp to the agora convo row
         await key(app, KEY.enter);
         const view = await waitFrame(app, (f) => f.includes("em execução"));
         expect(view).toContain("consertar o login"); // read-only log peek
@@ -642,8 +690,7 @@ describe("tui", () => {
         // X X ends it for real
         for (const ch of "consertar o login") await key(app, ch);
         await waitFrame(app, (f) => f.includes("1 resultado"));
-        await key(app, KEY.up, 4);
-        await key(app, KEY.down, 2);
+        await key(app, KEY.up, 4); // clamp to the agora convo row
         await key(app, KEY.enter);
         await waitFrame(app, (f) => f.includes("em execução"));
         await key(app, "X");
@@ -678,7 +725,9 @@ describe("tui", () => {
       stdout: "ignore",
       stderr: "ignore",
     });
+    let migrated: Choice | undefined;
     let launched: Choice | undefined;
+    let backed = false;
     try {
       await waitFor(() => runningResumeIds().has(id));
       const convo: NativeSession = {
@@ -692,10 +741,14 @@ describe("tui", () => {
       const app = mount(
         <Running
           target={{ kind: "convo", convo }}
-          onBack={() => {}}
+          onBack={() => (backed = true)}
           onQuit={() => {}}
           onLaunch={(c) => (launched = c)}
           onAttach={() => {}}
+          onMigrate={(c) => {
+            migrated = c;
+            return { ok: true };
+          }}
         />,
       );
       try {
@@ -704,8 +757,9 @@ describe("tui", () => {
         await key(app, "T");
         await waitFrame(app, (f) => f.includes("T de novo"));
         await key(app, "T");
-        await waitFor(() => launched !== undefined);
-        expect(launched).toEqual({ dir: target, runtime: "muse", resume: id });
+        await waitFor(() => migrated !== undefined);
+        expect(migrated).toEqual({ dir: target, runtime: "muse", resume: id });
+        expect(launched).toBeUndefined(); // background: never attaches
         await waitFor(() => {
           try {
             process.kill(proc.pid, 0);
@@ -714,6 +768,7 @@ describe("tui", () => {
             return true;
           }
         });
+        await waitFor(() => backed); // back to Hub: 𖥠 shows there
       } finally {
         app.unmount();
       }
@@ -739,7 +794,8 @@ describe("tui", () => {
       stdout: "ignore",
       stderr: "ignore",
     });
-    let launched: Choice | undefined;
+    let migrated: Choice | undefined;
+    let backed = false;
     try {
       await waitFor(() => runningResumeIds().has(id));
       const convo: NativeSession = {
@@ -753,10 +809,14 @@ describe("tui", () => {
       const app = mount(
         <Running
           target={{ kind: "convo", convo }}
-          onBack={() => {}}
+          onBack={() => (backed = true)}
           onQuit={() => {}}
-          onLaunch={(c) => (launched = c)}
+          onLaunch={() => {}}
           onAttach={() => {}}
+          onMigrate={(c) => {
+            migrated = c;
+            return { ok: true };
+          }}
         />,
       );
       try {
@@ -766,8 +826,62 @@ describe("tui", () => {
         proc.kill();
         await waitFor(() => !runningResumeIds().has(id));
         await key(app, "T");
-        await waitFor(() => launched !== undefined);
-        expect(launched).toEqual({ dir: target, runtime: "muse", resume: id });
+        await waitFor(() => migrated !== undefined);
+        expect(migrated).toEqual({ dir: target, runtime: "muse", resume: id });
+        await waitFor(() => backed);
+      } finally {
+        app.unmount();
+      }
+    } finally {
+      try {
+        proc.kill();
+      } catch {
+        /* already dead */
+      }
+      rmSync(fake, { force: true });
+    }
+  });
+
+  test("failed migrate stays with an error", async () => {
+    const { rootA } = setupEnv();
+    const target = join(rootA, "proj");
+    const id = "cccccccc-3333-4333-8333-333333333333";
+    const fake = join(target, "muse");
+    writeFileSync(fake, "#!/bin/sh\nsleep 30\n");
+    chmodSync(fake, 0o755);
+    const proc = Bun.spawn([fake, "resume", id], {
+      cwd: target,
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    let backed = false;
+    try {
+      await waitFor(() => runningResumeIds().has(id));
+      const convo: NativeSession = {
+        harness: "muse",
+        id,
+        dir: target,
+        preview: "falhar-me",
+        updatedAt: Date.now(),
+        file: join(target, "session.jsonl"),
+      };
+      const app = mount(
+        <Running
+          target={{ kind: "convo", convo }}
+          onBack={() => (backed = true)}
+          onQuit={() => {}}
+          onLaunch={() => {}}
+          onAttach={() => {}}
+          onMigrate={() => ({ ok: false, error: "tmux quebrou" })}
+        />,
+      );
+      try {
+        await waitFrame(app, (f) => f.includes(`resume: ${id}`));
+        await key(app, "T");
+        await key(app, "T");
+        await waitFrame(app, (f) => f.includes("tmux quebrou"));
+        await sleep(200);
+        expect(backed).toBe(false);
       } finally {
         app.unmount();
       }
@@ -802,6 +916,7 @@ describe("tui", () => {
           onQuit={() => {}}
           onLaunch={(c) => (launched = c)}
           onAttach={() => {}}
+          onMigrate={() => ({ ok: true })}
         />,
       );
       try {
@@ -839,6 +954,7 @@ describe("tui", () => {
         onQuit={() => {}}
         onLaunch={(c) => (launched = c)}
         onAttach={() => {}}
+        onMigrate={() => ({ ok: true })}
       />,
     );
     try {

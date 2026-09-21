@@ -17,6 +17,7 @@ import {
   HARNESS_LABEL,
   convoDisplay,
   convoExpandLabel,
+  firstItemIndex,
   isTmpDir,
   matchConvo,
   matchSession,
@@ -455,7 +456,22 @@ export default function Hub({
   }, [tmuxPanes, tmuxSessions, representedTmux]);
 
   const rows: HubRow[] = useMemo(() => {
-    const out: HubRow[] = [{ t: "toggleRecents" }];
+    // quick access to everything alive right now (Recentes/Conversas keep
+    // showing them too, pinned to the top of their own sections)
+    const out: HubRow[] = [];
+    const liveSessions = sessions
+      .filter((s) => isRunning(s) && matchSession(s, query))
+      .sort((a, b) => (a.last_used < b.last_used ? 1 : -1));
+    const liveConvos = effectiveConvos
+      .filter((c) => isConvoLive(c) && matchConvo(c, query))
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+    const nowCount = liveSessions.length + liveConvos.length;
+    if (nowCount > 0) {
+      out.push({ t: "header", label: `◉ agora  ·  ${nowCount}` });
+      for (const s of liveSessions) out.push({ t: "session", session: s });
+      for (const c of liveConvos) out.push({ t: "convo", convo: c });
+    }
+    out.push({ t: "toggleRecents" });
     if (showRecents) {
       const visible = sessions.filter((s) => matchSession(s, query));
       // live sessions pin to the top (stable: keeps recency order inside groups)
@@ -747,13 +763,18 @@ export default function Hub({
 
   const columns = stdout?.columns ?? DEFAULT_COLS;
   const listHeight = listHeightFor(stdout?.rows);
+  // the agora section may put a header first: land on the first live row
+  useEffect(() => {
+    setIndex(firstItemIndex(rows));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [start, end] = windowSlice(rows.length, index, listHeight);
   // room for the filter row once root padding takes its share
   const leftWidth = columns - 4;
 
   const renderHeader = (label: string, at: number) => {
     const icon = label[0];
-    const colored = ["⬢", "✳", "◈", "▸"].includes(icon);
+    const colored = ["⬢", "✳", "◈", "▸", "◉"].includes(icon);
     return (
       <HeaderRow key={at}>
         {colored ? (

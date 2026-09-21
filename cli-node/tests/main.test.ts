@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildArgv, launch, listSessions, parseArgs } from "../src/main.tsx";
+import { launch, listSessions, parseArgs } from "../src/main.tsx";
+import { buildArgv } from "../src/runtimes";
 import { load } from "../src/history";
-import { tmuxBaseName } from "../src/tmux";
+import { launchDetached, tmuxBaseName } from "../src/tmux";
 import { fakeCalls, setupFakeTmux } from "./tmux-fake";
 
 /** Run launch() in a child bun (launch execs, so in-process would replace
@@ -108,6 +109,64 @@ describe("main", () => {
       expect(load(db).some((s) => s.dir === target && s.runtime === "shell")).toBe(true);
     } finally {
       fake.restore();
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  test("launchDetached creates detached without recording or attaching", () => {
+    const base = mkdtempSync(join(tmpdir(), "atlas-test-"));
+    const target = join(base, "proj");
+    mkdirSync(target, { recursive: true });
+    const db = join(base, "history.json");
+    const prevDb = process.env.ATLAS_HISTORY_FILE;
+    process.env.ATLAS_HISTORY_FILE = db;
+    const fake = setupFakeTmux();
+    try {
+      const name = tmuxBaseName(target, "shell");
+      const r = launchDetached(target, "shell");
+      expect(r).toEqual({ ok: true, name });
+      const calls = fakeCalls(fake);
+      expect(calls).toHaveLength(1);
+      expect(calls[0]).toContain(`new-session -d -s ${name} -c ${target}`);
+      expect(load(db)).toEqual([]); // migrate never records history
+    } finally {
+      fake.restore();
+      if (prevDb === undefined) delete process.env.ATLAS_HISTORY_FILE;
+      else process.env.ATLAS_HISTORY_FILE = prevDb;
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  test("launchDetached reuses an existing session", () => {
+    const base = mkdtempSync(join(tmpdir(), "atlas-test-"));
+    const target = join(base, "proj");
+    mkdirSync(target, { recursive: true });
+    const name = tmuxBaseName(target, "shell");
+    const fake = setupFakeTmux([`${name}\t0\t1700000000`]);
+    try {
+      expect(launchDetached(target, "shell")).toEqual({ ok: true, name });
+      expect(fakeCalls(fake)).toEqual([]);
+    } finally {
+      fake.restore();
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  test("launchDetached fails cleanly without tmux or dir", () => {
+    const base = mkdtempSync(join(tmpdir(), "atlas-test-"));
+    try {
+      expect(launchDetached(join(base, "missing"), "shell").ok).toBe(false);
+      const prevBin = process.env.ATLAS_TMUX_BIN;
+      process.env.ATLAS_TMUX_BIN = "/nonexistent/atlas-no-tmux";
+      try {
+        const r = launchDetached(base, "shell");
+        expect(r.ok).toBe(false);
+        expect(r.error).toContain("tmux");
+      } finally {
+        if (prevBin === undefined) delete process.env.ATLAS_TMUX_BIN;
+        else process.env.ATLAS_TMUX_BIN = prevBin;
+      }
+    } finally {
       rmSync(base, { recursive: true, force: true });
     }
   });
