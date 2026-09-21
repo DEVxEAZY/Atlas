@@ -5,7 +5,7 @@ import type { Choice } from "../App";
 import type { Session } from "../history";
 import type { NativeSession } from "../native/index";
 import { TRANSCRIPT_PEEK, peekTranscript, type PeekLine } from "../native/peek";
-import { pidsForKey, pidsForResume, procStartedAt, terminatePids } from "../process";
+import { pidsForKey, pidsForResume, procStartedAt, resumeIdsForPids, terminatePids } from "../process";
 import { convoDisplay, sessionDisplay } from "../rows";
 import { RUNTIME_COLOR, RUNTIME_ICON, TMUX_MARK, theme } from "../theme";
 import { capturePane, hasSession, killSession } from "../tmux";
@@ -40,6 +40,28 @@ function resolveProcs(t: RunningTarget): ProcInfo[] {
     const started = procStartedAt(pid);
     return { pid, age: started === null ? null : ago(new Date(started).toISOString()) };
   });
+}
+
+type SessionMigrate = { pids: number[]; id: string } | { refuse: string };
+
+/** What a history session migrates with: its live pids plus the single
+ *  resume id they hold. Anything else refuses with guidance instead of
+ *  guessing (a wrong resume would orphan the real conversation). */
+function resolveSessionMigrate(dir: string, runtime: string): SessionMigrate {
+  if (runtime === "shell") {
+    return { refuse: "shell não tem conversa para retomar — abra uma nova sessão no tmux com n no Hub." };
+  }
+  const pids = pidsForKey(dir, runtime);
+  if (pids.length === 0) return { refuse: "o processo já encerrou — esc volta ao Hub." };
+  const ids = resumeIdsForPids(pids);
+  if (ids.length === 0) {
+    return {
+      refuse:
+        "esse processo não tem resume id — encerre com X e reabra a conversa pelo Hub para ir ao tmux.",
+    };
+  }
+  if (ids.length > 1) return { refuse: "vários resumes nesse grupo — migre a conversa pelo Hub." };
+  return { pids, id: ids[0] };
 }
 
 export default function Running({ target, onBack, onQuit, onLaunch, onAttach, onMigrate }: Props) {
@@ -115,30 +137,45 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach, on
     setMsg(`não consegui encerrar o PID ${result.alive.join(", ")} — sem permissão?`);
   };
 
-  /** Move an external convo under tmux, staying in Atlas: its pid(s) must
+  /** Move an external session under tmux, staying in Atlas: its pid(s) must
    *  die first (a duplicate resume corrupts the session), then the same
    *  conversation relaunches detached. Aborts if anything stays alive. */
   const migrate = async () => {
-    if (target.kind !== "convo" || killing) return;
+    if (killing) return;
+    let pids: number[];
+    let dir: string;
+    let runtime: string;
+    let resume: string;
+    if (target.kind === "convo") {
+      pids = pidsForResume(target.convo.id);
+      dir = target.convo.dir ?? homedir();
+      runtime = target.convo.harness;
+      resume = target.convo.id;
+    } else {
+      const r = resolveSessionMigrate(target.session.dir, target.session.runtime);
+      if (!("id" in r)) {
+        setMsg(r.refuse);
+        return;
+      }
+      pids = r.pids;
+      dir = target.session.dir;
+      runtime = target.session.runtime;
+      resume = r.id;
+    }
     setKilling(true);
     try {
-      const fresh = pidsForResume(target.convo.id);
       const relaunch = () => {
-        const r = onMigrate({
-          dir: target.convo.dir ?? homedir(),
-          runtime: target.convo.harness,
-          resume: target.convo.id,
-        });
+        const r = onMigrate({ dir, runtime, resume });
         // back to Hub on success: fresh lists show the 𖥠 immediately
         if (!r.ok) setMsg(r.error ?? "não consegui criar a sessão tmux.");
         else onBack();
       };
-      if (fresh.length === 0) {
+      if (pids.length === 0) {
         relaunch(); // died on its own: revive straight into tmux
         return;
       }
       setMsg("encerrando aqui para migrar…");
-      const result = await terminatePids(fresh);
+      const result = await terminatePids(pids);
       if (result.alive.length > 0) {
         setMsg(`não consegui encerrar o PID ${result.alive.join(", ")} — migração abortada.`);
         return;
@@ -209,9 +246,17 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach, on
       } else {
         void kill();
       }
-    } else if (input === "T" && !key.ctrl && !key.meta && !ended && !tmux && target.kind === "convo") {
+    } else if (input === "T" && !key.ctrl && !key.meta && !ended && !tmux) {
       setArmed(false);
       if (!armedMigrate) {
+        // sessions pre-resolve: refuse now instead of arming a dead end
+        if (target.kind === "session") {
+          const r = resolveSessionMigrate(target.session.dir, target.session.runtime);
+          if (!("id" in r)) {
+            setMsg(r.refuse);
+            return;
+          }
+        }
         setArmedMigrate(true);
         setMsg("T de novo para migrar para o tmux (encerra aqui, continua lá em 2º plano).");
       } else {
@@ -324,18 +369,12 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach, on
                   ["X", "encerrar"],
                   ...(scrollable ? [["↑↓", "rolar"] as [string, string]] : []),
                 ]
-              : target.kind === "convo"
-                ? [
-                    ["esc", "voltar sem matar"],
-                    ["X", "encerrar sessão"],
-                    ["T", "migrar p/ tmux"],
-                    ...(scrollable ? [["↑↓", "rolar"] as [string, string]] : []),
-                  ]
-                : [
-                    ["esc", "voltar sem matar"],
-                    ["X", "encerrar sessão"],
-                    ...(scrollable ? [["↑↓", "rolar"] as [string, string]] : []),
-                  ]
+              : [
+                  ["esc", "voltar sem matar"],
+                  ["X", "encerrar sessão"],
+                  ["T", "migrar p/ tmux"],
+                  ...(scrollable ? [["↑↓", "rolar"] as [string, string]] : []),
+                ]
         }
       />
     </Box>

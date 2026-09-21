@@ -238,4 +238,26 @@ describe("tmux-managed sessions", () => {
       app.unmount();
     }
   });
+
+  test("hub marks a session row for a resume-suffixed tmux session", async () => {
+    const { rootA } = setupEnv();
+    const target = join(rootA, "proj");
+    record(target, "codex");
+    const id = "aaaaaaaa-1111-4111-8111-111111111111";
+    const name = tmuxBaseName(target, "codex", id); // atlas-proj-codex-<hash>-r<id12>
+    const fake = setupFakeTmux([`${name}\t0\t1700000000`], ["pane…"], [`${name}\tcodex\t${target}`]);
+    fakes.push(fake);
+    const app = mount(<App onDone={() => {}} />);
+    try {
+      // the session row (no resume of its own) still matches the -r name
+      const marked = await waitFrame(app, (f) => f.includes(TMUX_MARK));
+      expect(marked).toContain("proj");
+      expect(marked).not.toContain("sessões tmux"); // represented, not a stray
+      await key(app, KEY.enter); // snap sits on the agora row: manage view
+      const view = await waitFrame(app, (f) => f.includes(`Sessão em execução · ${name}`));
+      expect(view).toContain("entrar");
+    } finally {
+      app.unmount();
+    }
+  });
 });

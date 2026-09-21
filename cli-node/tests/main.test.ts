@@ -137,6 +137,25 @@ describe("main", () => {
     }
   });
 
+  test("launchDetached reports a runtime that dies right after start", () => {
+    const base = mkdtempSync(join(tmpdir(), "atlas-test-"));
+    const target = join(base, "proj");
+    mkdirSync(target, { recursive: true });
+    const fake = setupFakeTmux();
+    const prevCrash = process.env.TMUX_FAKE_CRASH;
+    process.env.TMUX_FAKE_CRASH = "1";
+    try {
+      const r = launchDetached(target, "shell", undefined, 0);
+      expect(r.ok).toBe(false);
+      expect(r.error).toContain("encerrou logo após");
+    } finally {
+      if (prevCrash === undefined) delete process.env.TMUX_FAKE_CRASH;
+      else process.env.TMUX_FAKE_CRASH = prevCrash;
+      fake.restore();
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
   test("launchDetached reuses an existing session", () => {
     const base = mkdtempSync(join(tmpdir(), "atlas-test-"));
     const target = join(base, "proj");

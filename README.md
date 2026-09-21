@@ -87,11 +87,17 @@ roots. The default roots are `~/@development` and `~/@megavale-repos`.
 | Preview a running tmux session / attach | `Enter` / `Enter` again |
 | Leave a preview / quit Atlas | `Esc` / `Ctrl-c` |
 | End the selected running session | `X`, then `X` again to confirm |
+| Migrate an external agent session into tmux | `T`, then `T` again (requires a resume ID) |
 | Detach inside tmux without ending the session | `Ctrl-b`, then `d` (default tmux prefix) |
 
 For a deliberate second session in the same directory, use `n`. Opening a
 running row shows its management view. Ending a session stops its work;
 detaching leaves it running.
+
+Migration stops the external process and resumes its conversation in a
+detached tmux session. It works from conversation and history rows; history
+rows need one unambiguous resume ID. Atlas refuses unsupported or ambiguous
+migrations with guidance.
 
 ```sh
 atlas --list
@@ -119,6 +125,12 @@ Atlas discovers real directories, reads local history and native conversation
 stores, and launches installed runtimes. tmux owns persistent sessions;
 Atlas captures pane output for previews and hands the terminal to tmux when
 you attach. `ATLAS_TMUX_BIN` can override tmux discovery on `PATH`.
+
+Atlas-created tmux sessions use
+`atlas-<dir>-<runtime>-<hash>[-r<resume>][-N]`. Foreign tmux sessions linked
+to a history row or live conversation mark that row `𖥠` instead of appearing
+twice. Unlinked agent sessions and orphaned `atlas-*` sessions appear under
+`◈ sessões tmux`; idle foreign shells are omitted.
 
 - Linux is the supported platform; macOS and Windows binaries are not provided.
 - Cross-terminal session management requires tmux. Direct launch remains available without it.

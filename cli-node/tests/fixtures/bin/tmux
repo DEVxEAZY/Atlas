@@ -15,6 +15,19 @@ case "$1" in
     awk -F'\t' -v n="$3" '$1!=n' "$state/sessions" 2>/dev/null > "$state/sessions.tmp" && mv "$state/sessions.tmp" "$state/sessions"
     awk -F'\t' -v n="$3" '$1!=n' "$state/panes" 2>/dev/null > "$state/panes.tmp" && mv "$state/panes.tmp" "$state/panes"
     ;;
-  new-session|attach-session|switch-client) echo "$@" >> "$state/calls";;
+  new-session)
+    echo "$@" >> "$state/calls"
+    # like real tmux, the session exists right after creation (unless
+    # TMUX_FAKE_CRASH simulates a runtime that dies on start)
+    if [ -z "$TMUX_FAKE_CRASH" ]; then
+      n=""; prev=""
+      for a in "$@"; do
+        if [ "$prev" = "-s" ]; then n="$a"; fi
+        prev="$a"
+      done
+      if [ -n "$n" ]; then printf '%s\t0\t0\n' "$n" >> "$state/sessions"; fi
+    fi
+    ;;
+  attach-session|switch-client) echo "$@" >> "$state/calls";;
   *) echo "fake-tmux: unsupported: $*" >&2; exit 1;;
 esac

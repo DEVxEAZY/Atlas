@@ -17,8 +17,9 @@ A **Session** is a runtime working in a defined directory.
 
 1. Atlas ships as a terminal UI plus a single compiled binary (Bun +
    TypeScript + Ink). No venv, no desktop shell, no daemon.
-2. Every session opens inside tmux under a deterministic name
-   (`atlas-<dir>-<runtime>-<hash>`), so any Atlas instance can manage it.
+2. With tmux available, Atlas-created sessions use a deterministic base name
+   (`atlas-<dir>-<runtime>-<hash>[-r<resume>][-N]`), so any Atlas instance can
+   manage them. Without tmux, Atlas launches the runtime directly.
 3. Atlas never duplicates: opening a live session shows a read-only
    management view; a deliberate second instance is an explicit action.
 4. Destructive keys arm on first press and act on second; removing a

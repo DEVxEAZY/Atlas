@@ -56,8 +56,12 @@ Do not use these shims for interactive agent sessions. See
 
 Opening a live row shows a management view; `n` explicitly creates a new
 session. Double `X` confirms termination. Removing running history is refused.
-tmux sessions under `atlas-*`, plus foreign sessions containing agent panes,
-can appear even when absent from Atlas history. Idle foreign shells are omitted.
+Atlas-created tmux sessions use
+`atlas-<dir>-<runtime>-<hash>[-r<resume>][-N]`; history rows also recognize
+resume-suffixed sessions. A foreign tmux session linked to a history row or
+live conversation marks that row `𖥠` instead of appearing twice. Unlinked
+agent sessions and orphaned `atlas-*` sessions can appear under
+`◈ sessões tmux`. Idle foreign shells are omitted.
 
 Outside tmux, attach uses process handoff; inside tmux, Atlas switches the
 current client. Missing tmux falls back to direct runtime launch. Native
@@ -65,8 +69,11 @@ conversations resume through each runtime's own arguments, not a replacement
 conversation store. Keep the shipped UI in pt-BR and launch documentation in
 English unless a localization change is explicitly designed.
 
-External conversation rows also offer double `T` to migrate into tmux in the
-background; verify runtime-specific behavior before changing this path.
+External conversation and history rows offer double `T` to migrate into tmux
+in the background. Migration stops the external processes before resuming the
+conversation. History rows require exactly one resume ID; shell sessions,
+missing IDs, and ambiguous groups are refused with guidance. Verify
+runtime-specific behavior before changing this path.
 `r` refreshes a tmux preview. `d` removes non-running history entries.
 
 ## Data and development isolation

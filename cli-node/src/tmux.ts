@@ -9,6 +9,7 @@ import { basename } from "node:path";
 import { which } from "bun";
 import { dlopen, FFIType, ptr, type Pointer } from "bun:ffi";
 import { buildArgv, getRuntime, isAvailable } from "./runtimes";
+import { resumeIdFromArgv, ttyForPid, type AgentProc } from "./process";
 import { isDir } from "./util";
 
 export const TMUX_PREFIX = "atlas-";
@@ -106,15 +107,17 @@ export interface TmuxPane {
   command: string;
   /** Pane working directory (`pane_current_path`). */
   path: string;
+  /** Pane terminal (`pane_tty`, "" when unknown). */
+  tty: string;
 }
 
-/** Parse `tmux list-panes -a -F '#{session_name}\t#{pane_current_command}\t#{pane_current_path}'`. */
+/** Parse `tmux list-panes -a -F '#{session_name}\t#{pane_current_command}\t#{pane_current_path}\t#{pane_tty}'`. */
 export function parseTmuxPanes(out: string): TmuxPane[] {
   const panes: TmuxPane[] = [];
   for (const line of out.split("\n")) {
-    const [session, command, path] = line.split("\t");
+    const [session, command, path, tty] = line.split("\t");
     if (!session || command === undefined || path === undefined) continue;
-    panes.push({ session, command, path });
+    panes.push({ session, command, path, tty: tty ?? "" });
   }
   return panes;
 }
@@ -125,7 +128,7 @@ export function listTmuxPanes(): TmuxPane[] {
   if (!bin) return [];
   try {
     const proc = Bun.spawnSync(
-      [bin, "list-panes", "-a", "-F", "#{session_name}\t#{pane_current_command}\t#{pane_current_path}"],
+      [bin, "list-panes", "-a", "-F", "#{session_name}\t#{pane_current_command}\t#{pane_current_path}\t#{pane_tty}"],
       { env: liveEnv() },
     );
     if (proc.exitCode !== 0) return [];
@@ -142,8 +145,15 @@ export interface DetachedLaunch {
 }
 
 /** Create a tmux session and leave it detached (background migrate): never
- *  records history, never attaches. Reuses the session when it exists. */
-export function launchDetached(dir: string, runtime: string, resume?: string): DetachedLaunch {
+ *  records history, never attaches. Reuses the session when it exists.
+ *  Verifies the session survives a grace period: a runtime that crashes on
+ *  start would otherwise vanish silently. */
+export function launchDetached(
+  dir: string,
+  runtime: string,
+  resume?: string,
+  graceMs = 400,
+): DetachedLaunch {
   if (!isDir(dir)) return { ok: false, error: `diretório não existe: ${dir}` };
   let def;
   try {
@@ -185,6 +195,10 @@ export function launchDetached(dir: string, runtime: string, resume?: string): D
   if (createdExit !== 0 && !hasSession(plan.name)) {
     return { ok: false, error: `não consegui criar a sessão tmux '${plan.name}'.` };
   }
+  if (graceMs > 0) Bun.sleepSync(graceMs);
+  if (!hasSession(plan.name)) {
+    return { ok: false, error: "o runtime encerrou logo após iniciar no tmux — nada foi migrado." };
+  }
   return { ok: true, name: plan.name };
 }
 
@@ -217,6 +231,51 @@ export function matchAtlasSession(
     if (live.has(name)) return name;
   }
   return null;
+}
+
+/** Session-name match plus resume-suffixed launches (`<base>-r<id>`): a
+ *  history row matches every tmux session its (dir, runtime) owns,
+ *  resumed or not. The `-r` anchor keeps other hashes from matching. */
+export function matchAtlasSessionDeep(live: Map<string, TmuxSession>, base: string): string | null {
+  const direct = matchAtlasSession(live, base);
+  if (direct) return direct;
+  const prefix = `${base}-r`;
+  for (const name of live.keys()) {
+    if (name.startsWith(prefix)) return name;
+  }
+  return null;
+}
+
+/** tmux sessions keyed by what the Hub already shows: history keys and resume ids. */
+export interface TmuxFallback {
+  byKey: Map<string, string>;
+  byResume: Map<string, string>;
+}
+
+/** Link live agents to their tmux panes by terminal: a process whose fd 0
+ *  is a pane pty runs inside that session, whatever the session is named.
+ *  Covers foreign sessions Atlas did not create (name matching cannot). */
+export function buildTmuxFallback(
+  agents: AgentProc[],
+  panes: TmuxPane[],
+  ttyOf: (pid: number) => string | null = ttyForPid,
+): TmuxFallback {
+  const byTty = new Map<string, string>();
+  for (const p of panes) {
+    if (p.tty && !byTty.has(p.tty)) byTty.set(p.tty, p.session);
+  }
+  const byKey = new Map<string, string>();
+  const byResume = new Map<string, string>();
+  for (const a of agents) {
+    const tty = ttyOf(a.pid);
+    const session = tty ? byTty.get(tty) : undefined;
+    if (!session) continue;
+    const key = `${a.dir}\0${a.bin}`;
+    if (!byKey.has(key)) byKey.set(key, session);
+    const id = resumeIdFromArgv(a.argv);
+    if (id && !byResume.has(id)) byResume.set(id, session);
+  }
+  return { byKey, byResume };
 }
 
 /** Quote one argv word for `sh -c` (tmux runs the command through a shell). */

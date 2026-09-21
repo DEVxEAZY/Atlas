@@ -8,8 +8,10 @@ import {
   capturePane,
   hasSession,
   killSession,
+  buildTmuxFallback,
   listAtlasSessions,
   matchAtlasSession,
+  matchAtlasSessionDeep,
   parseTmuxLs,
   parseTmuxPanes,
   planLaunch,
@@ -173,8 +175,8 @@ describe("tmux helpers", () => {
     const out =
       "legado\tcodex\t/tmp/proj\natlas-x-shell-abc\tbash\t/tmp\n" + "garbage-line\n";
     expect(parseTmuxPanes(out)).toEqual([
-      { session: "legado", command: "codex", path: "/tmp/proj" },
-      { session: "atlas-x-shell-abc", command: "bash", path: "/tmp" },
+      { session: "legado", command: "codex", path: "/tmp/proj", tty: "" },
+      { session: "atlas-x-shell-abc", command: "bash", path: "/tmp", tty: "" },
     ]);
     expect(parseTmuxPanes("")).toEqual([]);
   });
@@ -217,5 +219,56 @@ describe("tmux primitives against a real server", () => {
       if (prevBin === undefined) delete process.env.ATLAS_TMUX_BIN;
       else process.env.ATLAS_TMUX_BIN = prevBin;
     }
+  });
+});
+
+describe("tmux deep match and tty fallback", () => {
+  const sess = (name: string) => ({ name, attached: false, created: 0 });
+
+  test("matchAtlasSessionDeep covers resume-suffixed sessions", () => {
+    const base = "atlas-proj-codex-aaaaaa";
+    const live = new Map([[`${base}-rabcdef123456`, sess(`${base}-rabcdef123456`)]]);
+    expect(matchAtlasSessionDeep(live, base)).toBe(`${base}-rabcdef123456`);
+    // -N dup of a resume launch still matches
+    const dup = new Map([[`${base}-rabcdef123456-2`, sess(`${base}-rabcdef123456-2`)]]);
+    expect(matchAtlasSessionDeep(dup, base)).toBe(`${base}-rabcdef123456-2`);
+    // exact and -N keep priority
+    const both = new Map([
+      [`${base}-rabcdef123456`, sess(`${base}-rabcdef123456`)],
+      [base, sess(base)],
+    ]);
+    expect(matchAtlasSessionDeep(both, base)).toBe(base);
+  });
+
+  test("matchAtlasSessionDeep anchors on -r (no longer-hash match)", () => {
+    const base = "atlas-proj-codex-aaaaaa";
+    // a longer hash sharing the base prefix must NOT match
+    const evil = new Map([[`${base}b-r123456789012`, sess(`${base}b-r123456789012`)]]);
+    expect(matchAtlasSessionDeep(evil, base)).toBeNull();
+    expect(matchAtlasSessionDeep(new Map(), base)).toBeNull();
+  });
+
+  test("parseTmuxPanes reads the tty field, old lines stay valid", () => {
+    const panes = parseTmuxPanes("legado\tcodex\t/w/proj\t/dev/pts/3\nold\tbash\t/tmp");
+    expect(panes).toEqual([
+      { session: "legado", command: "codex", path: "/w/proj", tty: "/dev/pts/3" },
+      { session: "old", command: "bash", path: "/tmp", tty: "" },
+    ]);
+  });
+
+  test("buildTmuxFallback links agents to panes by terminal", () => {
+    const agents = [
+      { pid: 11, dir: "/w/proj", bin: "codex", argv: ["codex", "resume", "id-1"] },
+      { pid: 12, dir: "/w/other", bin: "muse", argv: ["muse"] },
+      { pid: 13, dir: "/w/gone", bin: "codex", argv: ["codex"] },
+    ];
+    const panes = [
+      { session: "legado", command: "codex", path: "/w/proj", tty: "/dev/pts/3" },
+      { session: "vazia", command: "muse", path: "/w/other", tty: "" },
+    ];
+    const ttyOf = (pid: number) => (pid === 11 ? "/dev/pts/3" : pid === 12 ? "/dev/pts/9" : null);
+    const fb = buildTmuxFallback(agents, panes, ttyOf);
+    expect(fb.byKey).toEqual(new Map([["/w/proj\0codex", "legado"]]));
+    expect(fb.byResume).toEqual(new Map([["id-1", "legado"]]));
   });
 });
