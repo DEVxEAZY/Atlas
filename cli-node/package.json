@@ -1,7 +1,25 @@
 {
   "name": "atlas-cli",
   "version": "0.1.0",
-  "description": "Atlas CLI/TUI port (Node): open coding-agent sessions in the right directory.",
+  "description": "Terminal session manager for coding agents, backed by tmux.",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DEVxEAZY/atlas-cli.git"
+  },
+  "homepage": "https://github.com/DEVxEAZY/atlas-cli#readme",
+  "bugs": {
+    "url": "https://github.com/DEVxEAZY/atlas-cli/issues"
+  },
+  "keywords": [
+    "cli",
+    "coding-agents",
+    "terminal",
+    "tmux",
+    "tui"
+  ],
+  "packageManager": "bun@1.4.2",
   "type": "module",
   "scripts": {
     "atlas": "bun src/main.tsx",
