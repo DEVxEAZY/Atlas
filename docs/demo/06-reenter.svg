@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="700" viewBox="0 0 1100 700" xml:space="preserve" font-family="DejaVu Sans Mono,monospace" role="img" aria-label="Entre na mesma sessão.">
-<title>Entre na mesma sessão.</title><defs>
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="700" viewBox="0 0 1100 700" xml:space="preserve" font-family="DejaVu Sans Mono,monospace" role="img" aria-label="Re-enter the same session.">
+<title>Re-enter the same session.</title><defs>
     <!-- Hand-drawn vector equivalent of TMUX_MARK (𖥠, U+16960).
          Bamum Supplement is absent from common terminal/web fallback fonts. -->
     <g id="tmux-mark" aria-label="𖥠">
@@ -8,8 +8,8 @@
       <circle cx="10" cy="2" r="1.2"/><circle cx="10" cy="18" r="1.2"/>
       <circle cx="2" cy="10" r="1.2"/><circle cx="18" cy="10" r="1.2"/>
     </g>
-  </defs><rect width="1100" height="700" fill="#000000"/><text style="white-space:pre" x="50" y="43" fill="#FFB386" font-size="16" letter-spacing="1">06 / 06 · CONTINUAR DE ONDE PAROU</text>
-<text style="white-space:pre" x="48" y="100" fill="#FFFFFF" font-size="35" font-family="DejaVu Sans,sans-serif" font-weight="bold">Entre na mesma sessão.</text>
+  </defs><rect width="1100" height="700" fill="#000000"/><text style="white-space:pre" x="50" y="43" fill="#FFB386" font-size="16" letter-spacing="1">06 / 06 · PICK UP WHERE YOU LEFT OFF</text>
+<text style="white-space:pre" x="48" y="100" fill="#FFFFFF" font-size="35" font-family="DejaVu Sans,sans-serif" font-weight="bold">Re-enter the same session.</text>
 <g transform="translate(50 133)"><rect x="1" y="1" width="998" height="468" rx="14" fill="#0D0D0D" stroke="#2A2A2A"/><text style="white-space:pre" x="28" y="30" fill="#8A8A8A" font-size="16" >terminal 2 · ~/@development/atlas-cli</text><path d="M1 47H999" stroke="#2A2A2A"/>
 <text style="white-space:pre" x="32" y="93" fill="#FFB386" font-size="25" font-weight="bold">Codex</text>
 <text style="white-space:pre" x="32" y="138" fill="#F8F4EB" font-size="22" >› Revise os testes do projeto.</text>
@@ -19,7 +19,7 @@
 <text style="white-space:pre" x="32" y="326" fill="#F8F4EB" font-size="20" >• Revisão em andamento. Preparando o resumo.</text>
 <rect x="1" y="424" width="998" height="45" fill="#7EE787"/>
 <text style="white-space:pre" x="22" y="453" fill="#000000" font-size="18" >[atlas-atlas-cli-codex-d77372] 0:codex*</text></g>
-<text style="white-space:pre" x="50" y="645" fill="#F8F4EB" font-size="21" >A mesma sessão tmux · o agente continuou trabalhando.</text>
+<text style="white-space:pre" x="50" y="645" fill="#F8F4EB" font-size="21" >Same tmux session · the agent kept working.</text>
 <rect x="50" y="677" width="154" height="3" fill="#FFB386"/>
 <rect x="218" y="677" width="154" height="3" fill="#FFB386"/>
 <rect x="386" y="677" width="154" height="3" fill="#FFB386"/>

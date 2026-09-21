@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="700" viewBox="0 0 1100 700" xml:space="preserve" font-family="DejaVu Sans Mono,monospace" role="img" aria-label="Está aqui: ◉ agora.">
-<title>Está aqui: ◉ agora.</title><defs>
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="700" viewBox="0 0 1100 700" xml:space="preserve" font-family="DejaVu Sans Mono,monospace" role="img" aria-label="Your session is still here.">
+<title>Your session is still here.</title><defs>
     <!-- Hand-drawn vector equivalent of TMUX_MARK (𖥠, U+16960).
          Bamum Supplement is absent from common terminal/web fallback fonts. -->
     <g id="tmux-mark" aria-label="𖥠">
@@ -8,8 +8,8 @@
       <circle cx="10" cy="2" r="1.2"/><circle cx="10" cy="18" r="1.2"/>
       <circle cx="2" cy="10" r="1.2"/><circle cx="18" cy="10" r="1.2"/>
     </g>
-  </defs><rect width="1100" height="700" fill="#000000"/><text style="white-space:pre" x="50" y="43" fill="#FFB386" font-size="16" letter-spacing="1">04 / 06 · ENCONTRAR A SESSÃO</text>
-<text style="white-space:pre" x="48" y="100" fill="#FFFFFF" font-size="35" font-family="DejaVu Sans,sans-serif" font-weight="bold">Está aqui: ◉ agora.</text>
+  </defs><rect width="1100" height="700" fill="#000000"/><text style="white-space:pre" x="50" y="43" fill="#FFB386" font-size="16" letter-spacing="1">04 / 06 · FIND THE SESSION</text>
+<text style="white-space:pre" x="48" y="100" fill="#FFFFFF" font-size="35" font-family="DejaVu Sans,sans-serif" font-weight="bold">Your session is still here.</text>
 <g transform="translate(50 133)"><rect x="1" y="1" width="998" height="468" rx="14" fill="#0D0D0D" stroke="#2A2A2A"/>
   <circle cx="25" cy="23" r="4" fill="#FFB386"/><circle cx="43" cy="23" r="4" fill="#FF8F6B"/><circle cx="61" cy="23" r="4" fill="#F472A0"/>
   <text style="white-space:pre" x="500" y="29" fill="#8A8A8A" font-size="16" text-anchor="middle">atlas</text>
@@ -46,7 +46,7 @@
   <text style="white-space:pre" x="541" y="442" fill="#FFB386" font-size="18" >X</text><text style="white-space:pre" x="553" y="442" fill="#8A8A8A" font-size="18" > matar · </text>
   <text style="white-space:pre" x="649" y="442" fill="#FFB386" font-size="18" >/</text><text style="white-space:pre" x="661" y="442" fill="#8A8A8A" font-size="18" > filtrar · </text>
   <text style="white-space:pre" x="779" y="442" fill="#FFB386" font-size="18" >q</text><text style="white-space:pre" x="791" y="442" fill="#8A8A8A" font-size="18" > sair</text></g>
-<text style="white-space:pre" x="50" y="645" fill="#F8F4EB" font-size="21" >Enter  →  abrir a prévia da sessão selecionada</text>
+<text style="white-space:pre" x="50" y="645" fill="#F8F4EB" font-size="21" >Enter  →  open a read-only preview of the selected session</text>
 <rect x="50" y="677" width="154" height="3" fill="#FFB386"/>
 <rect x="218" y="677" width="154" height="3" fill="#FFB386"/>
 <rect x="386" y="677" width="154" height="3" fill="#FFB386"/>
