@@ -142,6 +142,19 @@ describe("tui", () => {
   test("conversas expand and resume native session", async () => {
     setupEnv();
     const fix = join(import.meta.dir, "fixtures");
+    // pin convo order: updatedAt comes from mtimes, which depend on checkout
+    // timing — make 1111 strictly newer so "first convo" is deterministic
+    const now = new Date();
+    utimesSync(
+      join(fix, "claude/projects/-test-proj/22222222-2222-2222-2222-222222222222.jsonl"),
+      now,
+      new Date(now.getTime() - 60000),
+    );
+    utimesSync(
+      join(fix, "claude/projects/-test-proj/11111111-1111-1111-1111-111111111111.jsonl"),
+      now,
+      now,
+    );
     process.env.ATLAS_CLAUDE_HOME = join(fix, "claude");
     process.env.ATLAS_CODEX_HOME = join(fix, "codex");
     process.env.ATLAS_MUSE_HOME = join(fix, "muse");

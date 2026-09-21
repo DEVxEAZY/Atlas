@@ -15,6 +15,12 @@ jobs:
           bun-version: latest
       - run: bun install --frozen-lockfile
         working-directory: cli-node
+      # the TUI tests assume a box with the agent CLIs installed
+      - name: Shim codex/claude/muse on PATH
+        run: |
+          mkdir -p /tmp/cibin
+          for r in codex claude muse; do printf '#!/bin/sh\nexit 0\n' > /tmp/cibin/$r; chmod +x /tmp/cibin/$r; done
+          echo /tmp/cibin >> "$GITHUB_PATH"
       - run: bun test tests/
         working-directory: cli-node
       - run: bun run build
