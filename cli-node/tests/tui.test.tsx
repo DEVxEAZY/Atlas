@@ -9,6 +9,7 @@ import Running from "../src/screens/Running";
 import Runtime from "../src/screens/Runtime";
 import { load, record } from "../src/history";
 import { runningKeys, runningResumeIds } from "../src/process";
+import type { NativeSession } from "../src/native/index";
 import { KEY, LIVE_SPIN_RE, burst, key, mount, sleep, waitFor, waitFrame } from "./ink-helpers";
 
 let tmpdirs: string[] = [];
@@ -664,6 +665,164 @@ describe("tui", () => {
       rmSync(fake, { force: true });
     }
   }, 30000);
+
+  test("T T migrates an external convo into tmux", async () => {
+    const { rootA } = setupEnv();
+    const target = join(rootA, "proj");
+    const id = "aaaaaaaa-1111-4111-8111-111111111111";
+    const fake = join(target, "muse");
+    writeFileSync(fake, "#!/bin/sh\nsleep 30\n");
+    chmodSync(fake, 0o755);
+    const proc = Bun.spawn([fake, "resume", id], {
+      cwd: target,
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    let launched: Choice | undefined;
+    try {
+      await waitFor(() => runningResumeIds().has(id));
+      const convo: NativeSession = {
+        harness: "muse",
+        id,
+        dir: target,
+        preview: "migrar-me",
+        updatedAt: Date.now(),
+        file: join(target, "session.jsonl"),
+      };
+      const app = mount(
+        <Running
+          target={{ kind: "convo", convo }}
+          onBack={() => {}}
+          onQuit={() => {}}
+          onLaunch={(c) => (launched = c)}
+          onAttach={() => {}}
+        />,
+      );
+      try {
+        await waitFrame(app, (f) => f.includes(`resume: ${id}`));
+        expect(app.lastFrame()).toContain("migrar p/ tmux");
+        await key(app, "T");
+        await waitFrame(app, (f) => f.includes("T de novo"));
+        await key(app, "T");
+        await waitFor(() => launched !== undefined);
+        expect(launched).toEqual({ dir: target, runtime: "muse", resume: id });
+        await waitFor(() => {
+          try {
+            process.kill(proc.pid, 0);
+            return false;
+          } catch {
+            return true;
+          }
+        });
+      } finally {
+        app.unmount();
+      }
+    } finally {
+      try {
+        proc.kill();
+      } catch {
+        /* already dead */
+      }
+      rmSync(fake, { force: true });
+    }
+  });
+
+  test("T on a died convo revives straight into tmux", async () => {
+    const { rootA } = setupEnv();
+    const target = join(rootA, "proj");
+    const id = "bbbbbbbb-2222-4222-8222-222222222222";
+    const fake = join(target, "muse");
+    writeFileSync(fake, "#!/bin/sh\nsleep 30\n");
+    chmodSync(fake, 0o755);
+    const proc = Bun.spawn([fake, "resume", id], {
+      cwd: target,
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    let launched: Choice | undefined;
+    try {
+      await waitFor(() => runningResumeIds().has(id));
+      const convo: NativeSession = {
+        harness: "muse",
+        id,
+        dir: target,
+        preview: "reviver-me",
+        updatedAt: Date.now(),
+        file: join(target, "session.jsonl"),
+      };
+      const app = mount(
+        <Running
+          target={{ kind: "convo", convo }}
+          onBack={() => {}}
+          onQuit={() => {}}
+          onLaunch={(c) => (launched = c)}
+          onAttach={() => {}}
+        />,
+      );
+      try {
+        await waitFrame(app, (f) => f.includes(`resume: ${id}`));
+        await key(app, "T");
+        await waitFrame(app, (f) => f.includes("T de novo"));
+        proc.kill();
+        await waitFor(() => !runningResumeIds().has(id));
+        await key(app, "T");
+        await waitFor(() => launched !== undefined);
+        expect(launched).toEqual({ dir: target, runtime: "muse", resume: id });
+      } finally {
+        app.unmount();
+      }
+    } finally {
+      try {
+        proc.kill();
+      } catch {
+        /* already dead */
+      }
+      rmSync(fake, { force: true });
+    }
+  });
+
+  test("migrate key shows for convos only", async () => {
+    const { rootA } = setupEnv();
+    const target = join(rootA, "proj");
+    record(target, "codex");
+    const fake = join(target, "codex");
+    writeFileSync(fake, "#!/bin/sh\nsleep 30\n");
+    chmodSync(fake, 0o755);
+    const proc = Bun.spawn([fake], { cwd: target, stdout: "ignore", stderr: "ignore" });
+    let launched: Choice | undefined;
+    try {
+      await waitForLive(proc.pid, `${target}\0codex`);
+      const app = mount(
+        <Running
+          target={{
+            kind: "session",
+            session: { dir: target, runtime: "codex", last_used: new Date().toISOString(), uses: 1 },
+          }}
+          onBack={() => {}}
+          onQuit={() => {}}
+          onLaunch={(c) => (launched = c)}
+          onAttach={() => {}}
+        />,
+      );
+      try {
+        const frame = await waitFrame(app, (f) => f.includes("em execução"));
+        expect(frame).not.toContain("migrar p/ tmux");
+        await key(app, "T");
+        await sleep(200);
+        expect(launched).toBeUndefined();
+        expect(app.lastFrame() ?? "").not.toContain("T de novo");
+      } finally {
+        app.unmount();
+      }
+    } finally {
+      try {
+        proc.kill();
+      } catch {
+        /* already dead */
+      }
+      rmSync(fake, { force: true });
+    }
+  });
 
   test("running view on an ended session offers to launch", async () => {
     const { rootA } = setupEnv();

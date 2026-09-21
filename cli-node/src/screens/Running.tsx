@@ -57,6 +57,7 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach }: 
   );
   const [hiddenTail, setHiddenTail] = useState(0); // transcript lines hidden below the fold
   const [armed, setArmed] = useState(false);
+  const [armedMigrate, setArmedMigrate] = useState(false);
   const [killing, setKilling] = useState(false);
   const [msg, setMsg] = useState("");
   const { stdout } = useStdout();
@@ -112,6 +113,36 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach }: 
     setMsg(`não consegui encerrar o PID ${result.alive.join(", ")} — sem permissão?`);
   };
 
+  /** Move an external convo under tmux: its pid(s) must die first (a
+   *  duplicate resume corrupts the session), then the same conversation
+   *  relaunches inside tmux. Aborts if anything stays alive. */
+  const migrate = async () => {
+    if (target.kind !== "convo" || killing) return;
+    setKilling(true);
+    try {
+      const fresh = pidsForResume(target.convo.id);
+      const relaunch = () =>
+        onLaunch({
+          dir: target.convo.dir ?? homedir(),
+          runtime: target.convo.harness,
+          resume: target.convo.id,
+        });
+      if (fresh.length === 0) {
+        relaunch(); // died on its own: revive straight into tmux
+        return;
+      }
+      setMsg("encerrando aqui para migrar…");
+      const result = await terminatePids(fresh);
+      if (result.alive.length > 0) {
+        setMsg(`não consegui encerrar o PID ${result.alive.join(", ")} — migração abortada.`);
+        return;
+      }
+      relaunch();
+    } finally {
+      setKilling(false);
+    }
+  };
+
   const refreshTmux = () => {
     if (!tmux) return;
     const alive = hasSession(tmux);
@@ -159,6 +190,7 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach }: 
     } else if (input === "r" && tmux && !ended && !key.ctrl && !key.meta) {
       refreshTmux();
     } else if (input === "X" && !key.ctrl && !key.meta && !ended) {
+      setArmedMigrate(false);
       if (!armed) {
         setArmed(true);
         setMsg(
@@ -170,6 +202,15 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach }: 
         );
       } else {
         void kill();
+      }
+    } else if (input === "T" && !key.ctrl && !key.meta && !ended && !tmux && target.kind === "convo") {
+      setArmed(false);
+      if (!armedMigrate) {
+        setArmedMigrate(true);
+        setMsg("T de novo para migrar para o tmux (encerra aqui, retoma a mesma conversa lá).");
+      } else {
+        setArmedMigrate(false);
+        void migrate();
       }
     }
   });
@@ -277,11 +318,18 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach }: 
                   ["X", "encerrar"],
                   ...(scrollable ? [["↑↓", "rolar"] as [string, string]] : []),
                 ]
-              : [
-                  ["esc", "voltar sem matar"],
-                  ["X", "encerrar sessão"],
-                  ...(scrollable ? [["↑↓", "rolar"] as [string, string]] : []),
-                ]
+              : target.kind === "convo"
+                ? [
+                    ["esc", "voltar sem matar"],
+                    ["X", "encerrar sessão"],
+                    ["T", "migrar p/ tmux"],
+                    ...(scrollable ? [["↑↓", "rolar"] as [string, string]] : []),
+                  ]
+                : [
+                    ["esc", "voltar sem matar"],
+                    ["X", "encerrar sessão"],
+                    ...(scrollable ? [["↑↓", "rolar"] as [string, string]] : []),
+                  ]
         }
       />
     </Box>

@@ -44,7 +44,7 @@ row at the end of the section reveals them (live ones always show).
 |---|---|
 | Hub | `Enter` expand/open/resume · `←→` collapse/expand · `n` new · `r` runtime · `d` remove (refused while running) · `X` twice to kill the row · `/` filter · `q` quit · type to filter |
 | Running session (tmux 𖥠) | `Enter` attach · `r` refresh pane preview · `esc` back · `X` twice to end the session · `↑↓` scroll |
-| Running session (external) | `esc` back without touching the process · `X` twice to really end it · `↑↓` scroll the log |
+| Running session (external) | `esc` back without touching the process · `X` twice to really end it · `T` twice to migrate into tmux (convos) · `↑↓` scroll the log |
 | Domain / New session | type to filter or paste a path · `Enter` confirm · `esc` back |
 | Runtime | `↑↓` move · `Enter` pick (pre-selects the directory's last runtime) · `esc` back |
 
