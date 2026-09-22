@@ -5,6 +5,7 @@
 #   calls     appended invocations (all but ls/has-session/capture-pane)
 state="${TMUX_FAKE_STATE:?TMUX_FAKE_STATE not set}"
 case "$1" in
+  -V) echo "tmux 3.4";;
   ls) cat "$state/sessions" 2>/dev/null;;
   has-session)
     awk -F'\t' -v n="$3" '$1==n{found=1} END{exit !found}' "$state/sessions" 2>/dev/null;;

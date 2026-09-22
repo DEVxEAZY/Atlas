@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import React, { useEffect, useMemo, useState } from "react";
-import { Box, Text, useInput, useStdout } from "ink";
+import { Box, Text, useInput } from "ink";
 import TextInput from "ink-text-input";
 import { load, rekeyRuntime, remove, type Session } from "../history";
 import {
@@ -38,14 +38,13 @@ import {
   listTmuxPanes,
   matchAtlasSession,
   matchAtlasSessionDeep,
-  tmuxAvailable,
   tmuxBaseName,
+  tmuxUsable,
   type TmuxFallback,
   type TmuxPane,
   type TmuxSession,
 } from "../tmux";
 import {
-  DEFAULT_COLS,
   Dim,
   HeaderRow,
   HintBar,
@@ -53,10 +52,12 @@ import {
   StatusLine,
   hintsWidth,
   Title,
+  hubBoat,
   listHeightFor,
 } from "../components/chrome";
 import Voyage from "../components/Voyage";
-import { useLiveIndex } from "../components/useLiveIndex";
+import { useLive, useLiveIndex } from "../components/useLiveIndex";
+import { useTermSize } from "../components/useTermSize";
 import { useSpinner } from "../components/useSpinner";
 import {
   keysForAgents,
@@ -70,7 +71,15 @@ import {
   terminatePids,
 } from "../process";
 import type { Choice } from "../App";
-import { convoMigration, runMigration, sessionMigration, type MigrateResult, type Migration } from "../migrate";
+import {
+  convoMigration,
+  migrationArmKey,
+  migrationInFlight,
+  runMigration,
+  sessionMigration,
+  type MigrateResult,
+  type Migration,
+} from "../migrate";
 import type { RunningTarget } from "./Running";
 
 export const RECENT_LIMIT = 10;
@@ -338,13 +347,16 @@ export default function Hub({
   const [index, indexRef, setIndex] = useLiveIndex(0);
   const [msg, setMsg] = useState("");
   /** Row key armed by the first X (second X on the same row kills). */
-  const [armedKill, setArmedKill] = useState<string | null>(null);
+  // armed keys and the busy flag are read through refs: keys coalesced
+  // into one stdin read (lagged SSH, a blocking refresh) must see the
+  // disarm that the key before them just did
+  const [, armedKillRef, setArmedKill] = useLive<string | null>(null);
   /** Row key armed by the first T (second T on the same row migrates). */
-  const [armedMigrate, setArmedMigrate] = useState<string | null>(null);
-  const [killing, setKilling] = useState(false);
+  const [, armedMigrateRef, setArmedMigrate] = useLive<string | null>(null);
+  const [, killingRef, setKilling] = useLive(false);
   // no tmux, no migration: the T hint only shows where it can work
-  const [tmuxOk] = useState(() => tmuxAvailable());
-  const { stdout } = useStdout();
+  const [tmuxOk] = useState(() => tmuxUsable());
+  const { columns, rows: termRows } = useTermSize();
   const spin = useSpinner(running.size > 0 || liveResumes.size > 0 || tmuxSessions.size > 0);
   const isRunning = (s: Session): boolean =>
     running.has(`${s.dir}\0${s.runtime}`) || tmuxForSession(s) !== null;
@@ -764,7 +776,7 @@ export default function Hub({
     }
     // a kill or migration is between SIGTERM and relaunch: leaving now would
     // strand the agent stopped and never resumed
-    if (killing) return;
+    if (killingRef.current || migrationInFlight()) return;
     // an armed X/T only survives its own second press: moving, filtering or
     // any other key disarms, so a later lone press never acts unprompted
     if (input !== "T" || key.ctrl || key.meta) setArmedMigrate(null);
@@ -815,7 +827,7 @@ export default function Hub({
         setSessions(sessions.filter((x) => x !== at.session));
         setMsg("Sessão removida do histórico.");
       }
-    } else if (input === "T" && !key.ctrl && !key.meta && !killing) {
+    } else if (input === "T" && !key.ctrl && !key.meta) {
       const at = indexRef.current !== null ? rows[indexRef.current] : undefined;
       const m = at ? migrationFor(at) : null;
       if (!at || !m || "refuse" in m) {
@@ -825,8 +837,8 @@ export default function Hub({
       }
       // arm on what the second T will actually do: if the row flips between
       // "open detached" and "stop and move" in between, ask again
-      const k = `${rowKey(at)}\0${m.pids.length > 0 ? "stop" : "open"}`;
-      if (armedMigrate !== k) {
+      const k = migrationArmKey(rowKey(at)!, m);
+      if (armedMigrateRef.current !== k) {
         setArmedMigrate(k);
         setMsg(
           m.pids.length > 0
@@ -838,7 +850,7 @@ export default function Hub({
       setArmedMigrate(null);
       setKilling(true);
       void migrateRow(at).finally(() => setKilling(false));
-    } else if (input === "X" && !key.ctrl && !key.meta && !killing) {
+    } else if (input === "X" && !key.ctrl && !key.meta) {
       const at = indexRef.current !== null ? rows[indexRef.current] : undefined;
       const info = at ? killableFor(at) : null;
       if (!info || (!info.tmux && info.procs.length === 0)) {
@@ -847,7 +859,7 @@ export default function Hub({
         return;
       }
       const k = rowKey(at!);
-      if (armedKill !== k) {
+      if (armedKillRef.current !== k) {
         setArmedKill(k);
         setMsg(
           info.tmux
@@ -868,8 +880,7 @@ export default function Hub({
     }
   });
 
-  const columns = stdout?.columns ?? DEFAULT_COLS;
-  const listHeight = listHeightFor(stdout?.rows);
+  const listHeight = listHeightFor(termRows);
   // the agora section may put a header first: land on the first live row
   useEffect(() => {
     setIndex(firstItemIndex(rows));
@@ -1008,7 +1019,7 @@ export default function Hub({
               : HINTS_SHORT
         }
       />
-      <Voyage />
+      <Voyage show={hubBoat(termRows)} />
     </Box>
   );
 }

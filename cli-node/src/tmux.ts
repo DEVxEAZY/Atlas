@@ -28,6 +28,26 @@ export function tmuxAvailable(): boolean {
   return tmuxBin() !== null;
 }
 
+const usable = new Map<string, boolean>();
+
+/** tmux is configured AND actually runs (`tmux -V`), cached per binary: a
+ *  mistyped ATLAS_TMUX_BIN must refuse a migration before anything is
+ *  stopped, not after. */
+export function tmuxUsable(): boolean {
+  const bin = tmuxBin();
+  if (!bin) return false;
+  const hit = usable.get(bin);
+  if (hit !== undefined) return hit;
+  let ok = false;
+  try {
+    ok = Bun.spawnSync([bin, "-V"], { env: liveEnv(), stdout: "ignore", stderr: "ignore" }).exitCode === 0;
+  } catch {
+    ok = false;
+  }
+  usable.set(bin, ok);
+  return ok;
+}
+
 /** Live environment for children: Bun.spawn* reuses the startup
  *  environment, so runtime mutations (tests, overrides) only propagate
  *  when passed explicitly. */
@@ -159,6 +179,7 @@ export function detachedPreflight(dir: string, runtime: string): string | null {
   }
   if (!isAvailable(def)) return `runtime '${runtime}' não encontrado no PATH.`;
   if (!tmuxBin()) return "tmux não instalado — a migração precisa do tmux.";
+  if (!tmuxUsable()) return `tmux não executa (${tmuxBin()}) — confira ATLAS_TMUX_BIN.`;
   return null;
 }
 

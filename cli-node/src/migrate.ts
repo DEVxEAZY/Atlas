@@ -57,18 +57,51 @@ export function convoMigration(c: NativeSession): Migration {
   return preflighted(agents.map((a) => a.pid), { dir, runtime: c.harness, resume: c.id });
 }
 
+/** Identity of an armed T: the row plus what the second T will do, so a row
+ *  that flips between "open detached" and "stop and move" re-asks. */
+export function migrationArmKey(rowKey: string, m: Extract<Migration, { pids: number[] }>): string {
+  return `${rowKey}\0${m.pids.length > 0 ? "stop" : "open"}`;
+}
+
 export interface MigrateResult {
   ok: boolean;
   name?: string;
   error?: string;
 }
 
+/** Migrations between SIGTERM and relaunch, process-wide: every screen
+ *  refuses to act while one runs, and quitting waits for it — leaving
+ *  mid-flight would strand the agent stopped and never resumed. */
+let inflight: Promise<unknown> | null = null;
+
+export function migrationInFlight(): boolean {
+  return inflight !== null;
+}
+
+/** Resolves once no migration is running (immediately when none is). */
+export function migrationsSettled(): Promise<void> {
+  return inflight ? inflight.then(() => {}, () => {}) : Promise.resolve();
+}
+
 /** Kill, verify, relaunch detached. Aborts (relaunching nothing) when any
  *  pid survives termination. */
-export async function runMigration(
+export function runMigration(
   m: Extract<Migration, { pids: number[] }>,
   relaunch: (c: Choice) => MigrateResult,
   onStatus: (msg: string) => void = () => {},
+): Promise<MigrateResult> {
+  const p = doMigration(m, relaunch, onStatus);
+  inflight = p;
+  void p.finally(() => {
+    if (inflight === p) inflight = null;
+  });
+  return p;
+}
+
+async function doMigration(
+  m: Extract<Migration, { pids: number[] }>,
+  relaunch: (c: Choice) => MigrateResult,
+  onStatus: (msg: string) => void,
 ): Promise<MigrateResult> {
   if (m.pids.length > 0) {
     onStatus("encerrando aqui para migrar…");

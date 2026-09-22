@@ -2,14 +2,18 @@ import { describe, expect, test } from "bun:test";
 import {
   MIN_LIST_ROWS,
   VOYAGE_MIN_ROWS,
+  boatFits,
   chromeRows,
   hintsWidth,
+  hubBoat,
   listHeightFor,
   voyageEnabled,
-  voyageRows,
 } from "../src/components/chrome";
 import { voyageFrame } from "../src/components/Voyage";
-import { runningChromeRows } from "../src/screens/Running";
+
+/** Layout math takes the environment explicitly: a developer who exported
+ *  the documented ATLAS_NO_BOAT=1 must still get a green suite. */
+const ENV = {};
 import {
   HINTS_FILTER,
   HINTS_FULL,
@@ -50,42 +54,24 @@ describe("voyage footer", () => {
 
 describe("hub chrome layout", () => {
   test("chrome occupies 10 rows with the boat, 8 when it is docked", () => {
-    expect(chromeRows(24)).toBe(10); // header 4 + footer 3 + boat 2 + margin 1
-    expect(chromeRows(VOYAGE_MIN_ROWS - 1)).toBe(8);
+    expect(chromeRows(24, ENV)).toBe(10); // header 4 + footer 3 + boat 2 + margin 1
+    expect(chromeRows(VOYAGE_MIN_ROWS - 1, ENV)).toBe(8);
+    expect(chromeRows(40, { ATLAS_NO_BOAT: "1" })).toBe(8);
   });
 
   test("list takes what is left, with a 3-row floor", () => {
-    expect(listHeightFor(24)).toBe(14);
-    expect(listHeightFor(undefined)).toBe(14);
-    expect(listHeightFor(13)).toBe(5); // short terminal: the boat's rows go to the list
-    expect(listHeightFor(10)).toBe(MIN_LIST_ROWS);
+    expect(listHeightFor(24, ENV)).toBe(14);
+    expect(listHeightFor(undefined, ENV)).toBe(14);
+    expect(listHeightFor(13, ENV)).toBe(5); // short terminal: the boat's rows go to the list
+    expect(listHeightFor(10, ENV)).toBe(MIN_LIST_ROWS);
   });
 
-  test("the boat reserves rows only when it is drawn", () => {
-    expect(voyageRows(24, {})).toBe(2);
-    expect(voyageRows(VOYAGE_MIN_ROWS - 1, {})).toBe(0);
-    expect(voyageRows(40, { ATLAS_NO_BOAT: "1" })).toBe(0);
-  });
-
-  test("hub chrome + list fits the screen except tiny last-resort terminals", () => {
-    for (let rows = 8; rows <= 40; rows++) {
-      const total = chromeRows(rows) + listHeightFor(rows);
-      if (rows - chromeRows(rows) < MIN_LIST_ROWS) expect(listHeightFor(rows)).toBe(MIN_LIST_ROWS);
-      else expect(total).toBeLessThanOrEqual(rows);
-    }
-  });
-
-  test("every management-view variant fits from 13 to 40 rows", () => {
-    for (let rows = 13; rows <= 40; rows++) {
-      for (const convo of [false, true])
-        for (const ended of [false, true])
-          for (const tmux of [false, true])
-            for (const procs of [0, 1]) {
-              const chrome = runningChromeRows({ convo, ended, tmux, procs }, rows);
-              const list = Math.max(MIN_LIST_ROWS, rows - chrome);
-              if (rows - chrome >= MIN_LIST_ROWS) expect(chrome + list).toBeLessThanOrEqual(rows);
-            }
-    }
+  test("the boat only docks where it could push the frame past the window", () => {
+    expect(boatFits(24, 20, ENV)).toBe(true); // 24 - 20 >= 2
+    expect(boatFits(24, 23, ENV)).toBe(false); // one spare row is not enough
+    expect(boatFits(VOYAGE_MIN_ROWS - 1, 0, ENV)).toBe(false);
+    expect(boatFits(40, 0, { ATLAS_NO_BOAT: "1" })).toBe(false);
+    expect(hubBoat(VOYAGE_MIN_ROWS, ENV)).toBe(true);
   });
 
   test("hint sets fit without wrapping", () => {

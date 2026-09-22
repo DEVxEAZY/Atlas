@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Box, Text, useInput, useStdout } from "ink";
+import { Box, Text, useInput } from "ink";
 import TextInput from "ink-text-input";
 import type { Candidate } from "../repos";
 import {
@@ -12,7 +12,8 @@ import {
 } from "../rows";
 import { fit, shorten } from "../util";
 import { theme } from "../theme";
-import { Dim, HeaderRow, HintBar, ItemRow, Title, voyageRows } from "../components/chrome";
+import { Dim, HeaderRow, HintBar, ItemRow, Title, VOYAGE_ROWS, boatFits } from "../components/chrome";
+import { useTermSize } from "../components/useTermSize";
 import Voyage from "../components/Voyage";
 import { useLiveIndex } from "../components/useLiveIndex";
 
@@ -29,7 +30,7 @@ const MARKER: Record<string, string> = { domain: "◆", repo: "●", dir: "○" 
 export default function DirPicker({ title, candidates, onPick, onBack, onQuit }: Props) {
   const [query, setQuery] = useState("");
   const [index, indexRef, setIndex] = useLiveIndex(null);
-  const { stdout } = useStdout();
+  const { columns, rows: termRows } = useTermSize();
 
   const rows: PickRow[] = useMemo(() => pickRows(candidates, query), [candidates, query]);
 
@@ -55,9 +56,12 @@ export default function DirPicker({ title, candidates, onPick, onBack, onQuit }:
   });
 
   const total = rows.filter((r) => r.t !== "header").length;
-  const listHeight = Math.max(5, (stdout?.rows || 24) - 9 - voyageRows(stdout?.rows));
+  // title 2 + filter 2 + hints 2, plus 3 spare rows (headers live in the list)
+  const PICKER_CHROME = 9;
+  const boat = boatFits(termRows, PICKER_CHROME + 5);
+  const listHeight = Math.max(5, termRows - PICKER_CHROME - (boat ? VOYAGE_ROWS : 0));
   const [start, end] = windowSlice(rows.length, index, listHeight);
-  const inner = Math.max(10, (stdout?.columns || 100) - 8);
+  const inner = Math.max(10, columns - 8);
 
   return (
     <Box flexDirection="column" paddingLeft={2} paddingRight={2}>
@@ -108,7 +112,7 @@ export default function DirPicker({ title, candidates, onPick, onBack, onQuit }:
           ["esc", "voltar"],
         ]}
       />
-      <Voyage />
+      <Voyage show={boat} />
     </Box>
   );
 }

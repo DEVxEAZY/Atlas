@@ -2,9 +2,9 @@
  *  endless "loading" loop. Owns its tick state, so only this component
  *  re-renders each frame — never the screen above it. */
 import React, { useEffect, useState } from "react";
-import { Text, useStdout } from "ink";
+import { Text } from "ink";
 import { theme } from "../theme";
-import { DEFAULT_COLS, voyageEnabled, voyageRows } from "./chrome";
+import { useTermSize } from "./useTermSize";
 
 export const VOYAGE_MAX_WIDTH = 64;
 const SEA = "~-~~-~~~--~-~~";
@@ -44,19 +44,19 @@ export function voyageFrame(width: number, tick: number): VoyageFrame {
   };
 }
 
-export default function Voyage({ ms = 140 }: { ms?: number }) {
+/** `show` comes from the screen's own budget (chrome.boatFits): only the
+ *  screen knows whether two more rows still fit the window. */
+export default function Voyage({ show, ms = 140 }: { show: boolean; ms?: number }) {
   const [tick, setTick] = useState(0);
-  const { stdout } = useStdout();
-  const enabled = voyageEnabled();
+  const { columns } = useTermSize();
   useEffect(() => {
-    if (!enabled) return;
+    if (!show) return;
     const t = setInterval(() => setTick((n) => n + 1), ms);
     return () => clearInterval(t);
-  }, [enabled, ms]);
-  // docked on short terminals: list budgets gave those rows to the list
-  if (voyageRows(stdout?.rows) === 0) return null;
+  }, [show, ms]);
+  if (!show) return null;
   // root padding takes 4 columns
-  const width = Math.min(VOYAGE_MAX_WIDTH, (stdout?.columns ?? DEFAULT_COLS) - 4);
+  const width = Math.min(VOYAGE_MAX_WIDTH, columns - 4);
   const f = voyageFrame(width, tick);
   return (
     <>

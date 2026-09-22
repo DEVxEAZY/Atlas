@@ -4,6 +4,7 @@ import Hub from "./screens/Hub";
 import DirPicker from "./screens/DirPicker";
 import Running, { type RunningTarget } from "./screens/Running";
 import Runtime from "./screens/Runtime";
+import { migrationInFlight, migrationsSettled } from "./migrate";
 import { launchDetached } from "./tmux";
 
 export interface Choice {
@@ -29,7 +30,13 @@ interface Props {
   start?: Screen;
 }
 
-export default function App({ onDone, start }: Props) {
+export default function App({ onDone: done, start }: Props) {
+  // every exit (quit, launch, attach) waits for an in-flight migration: the
+  // agent is already stopped, and leaving now would never resume it
+  const onDone = (c: Choice | null) => {
+    if (migrationInFlight()) void migrationsSettled().then(() => done(c));
+    else done(c);
+  };
   const [stack, setStack] = useState<Screen[]>(() =>
     start && start.name !== "hub" ? [{ name: "hub" }, start] : [{ name: "hub" }],
   );

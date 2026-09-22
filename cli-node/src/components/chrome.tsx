@@ -89,10 +89,17 @@ export function voyageEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return !v || v === "0";
 }
 
-/** Rows the boat takes at this terminal height — 0 when it is docked, so
- *  list budgets reserve exactly what Voyage draws. */
-export function voyageRows(rows: number | undefined, env: NodeJS.ProcessEnv = process.env): number {
-  return voyageEnabled(env) && (rows || DEFAULT_ROWS) >= VOYAGE_MIN_ROWS ? VOYAGE_ROWS : 0;
+/** Whether the boat fits under a screen whose other rows (chrome plus the
+ *  minimum content it must show) take `fixedRows`. The boat animates, and an
+ *  Ink frame taller than the terminal is fully cleared on every render — so
+ *  it is drawn only where it can never push the frame past the window. */
+export function boatFits(
+  rows: number | undefined,
+  fixedRows: number,
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  const r = rows || DEFAULT_ROWS;
+  return voyageEnabled(env) && r >= VOYAGE_MIN_ROWS && r - fixedRows >= VOYAGE_ROWS;
 }
 
 /** Hub chrome around the list, in rows: header is Title (1 + margin 1)
@@ -102,13 +109,19 @@ export function voyageRows(rows: number | undefined, env: NodeJS.ProcessEnv = pr
 const HEADER_ROWS = 4;
 const FOOTER_ROWS = 3;
 const CHROME_MARGIN = 1;
+const HUB_BASE = HEADER_ROWS + FOOTER_ROWS + CHROME_MARGIN;
+
+/** Whether the Hub draws the boat at this terminal height. */
+export function hubBoat(rows: number | undefined, env: NodeJS.ProcessEnv = process.env): boolean {
+  return boatFits(rows, HUB_BASE + MIN_LIST_ROWS, env);
+}
 
 /** Non-list rows the Hub chrome occupies at this terminal height. */
-export function chromeRows(rows?: number): number {
-  return HEADER_ROWS + FOOTER_ROWS + voyageRows(rows) + CHROME_MARGIN;
+export function chromeRows(rows?: number, env: NodeJS.ProcessEnv = process.env): number {
+  return HUB_BASE + (hubBoat(rows, env) ? VOYAGE_ROWS : 0);
 }
 
 /** Visible list rows (never overflows rows). */
-export function listHeightFor(rows: number | undefined): number {
-  return Math.max(MIN_LIST_ROWS, (rows || DEFAULT_ROWS) - chromeRows(rows));
+export function listHeightFor(rows: number | undefined, env: NodeJS.ProcessEnv = process.env): number {
+  return Math.max(MIN_LIST_ROWS, (rows || DEFAULT_ROWS) - chromeRows(rows, env));
 }

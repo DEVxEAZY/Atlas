@@ -1,11 +1,12 @@
 import React, { useState } from "react";
-import { Box, Text, useInput, useStdout } from "ink";
+import { Box, Text, useInput } from "ink";
 import { lastRuntimeFor } from "../history";
 import { getRuntime, isAvailable, type Runtime } from "../runtimes";
 import { firstItemIndex, moveIndex } from "../rows";
 import { fit, shorten } from "../util";
 import { theme } from "../theme";
-import { Dim, HeaderRow, HintBar, ItemRow, StatusLine, Title } from "../components/chrome";
+import { Dim, HeaderRow, HintBar, ItemRow, StatusLine, Title, boatFits } from "../components/chrome";
+import { useTermSize } from "../components/useTermSize";
 import Voyage from "../components/Voyage";
 import { useLiveIndex } from "../components/useLiveIndex";
 
@@ -45,8 +46,10 @@ export default function Runtime({ dir, onPick, onBack, onQuit }: Props) {
   const [rows] = useState<Row[]>(buildRows);
   const [index, indexRef, setIndex] = useLiveIndex(initialIndex(buildRows(), dir));
   const [msg, setMsg] = useState("");
-  const { stdout } = useStdout();
-  const inner = Math.max(10, (stdout?.columns || 100) - 8);
+  const { columns, rows: termRows } = useTermSize();
+  const inner = Math.max(10, columns - 8);
+  // title 2 + spacer 1 + 6 rows + status 1 + hints 2: a fixed 12-row screen
+  const boat = boatFits(termRows, 12);
 
   const detail = (r: Runtime): string => {
     if (r.name === "shell") return process.env.SHELL ?? "/bin/sh";
@@ -111,7 +114,7 @@ export default function Runtime({ dir, onPick, onBack, onQuit }: Props) {
           ["esc", "voltar"],
         ]}
       />
-      <Voyage />
+      <Voyage show={boat} />
     </Box>
   );
 }

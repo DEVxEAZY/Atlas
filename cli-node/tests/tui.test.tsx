@@ -9,6 +9,7 @@ import Running from "../src/screens/Running";
 import Runtime from "../src/screens/Runtime";
 import { load, record } from "../src/history";
 import { pidsForKey, runningKeys, runningResumeIds } from "../src/process";
+import { isTmpDir } from "../src/rows";
 import type { NativeSession } from "../src/native/index";
 import { KEY, LIVE_SPIN_RE, burst, key, mount, sleep, waitFor, waitFrame } from "./ink-helpers";
 import { setupFakeTmux, type FakeTmux } from "./tmux-fake";
@@ -465,13 +466,17 @@ describe("tui", () => {
       await waitFrame(app, (f) => f.includes("Conversas"));
       await key(app, KEY.down); // convos toggle
       await key(app, KEY.enter); // expand
-      // the temp project lives under /tmp, hidden by default: reveal it
-      await waitFrame(app, (f) => f.includes("mostrar conversas de /tmp"));
-      await key(app, KEY.down, 3); // clamp onto the /tmp toggle (last row)
-      await key(app, KEY.enter);
+      if (isTmpDir(target)) {
+        // the temp project lives under /tmp, hidden by default: reveal it
+        await waitFrame(app, (f) => f.includes("mostrar conversas de /tmp"));
+        await key(app, KEY.down, 3); // clamp onto the /tmp toggle (last row)
+        await key(app, KEY.enter);
+      }
       await waitFrame(app, (f) => f.includes("retomar em segundo plano"));
-      await key(app, KEY.down); // back onto the toggle…
-      await key(app, KEY.up); // …then up to the convo
+      if (isTmpDir(target)) {
+        await key(app, KEY.down); // back onto the toggle…
+        await key(app, KEY.up); // …then up to the convo
+      } else await key(app, KEY.down); // straight from the section toggle
       await key(app, "T");
       await waitFrame(app, (f) => f.includes("T de novo para abrir no tmux em 2º plano"));
       await key(app, "T");
@@ -513,13 +518,17 @@ describe("tui", () => {
       await waitFrame(app, (f) => f.includes("Conversas"));
       await key(app, KEY.down); // convos toggle
       await key(app, KEY.enter); // expand
-      // the temp project lives under /tmp, hidden by default: reveal it
-      await waitFrame(app, (f) => f.includes("mostrar conversas de /tmp"));
-      await key(app, KEY.down, 3); // clamp onto the /tmp toggle (last row)
-      await key(app, KEY.enter);
+      if (isTmpDir(target)) {
+        // the temp project lives under /tmp, hidden by default: reveal it
+        await waitFrame(app, (f) => f.includes("mostrar conversas de /tmp"));
+        await key(app, KEY.down, 3); // clamp onto the /tmp toggle (last row)
+        await key(app, KEY.enter);
+      }
       await waitFrame(app, (f) => f.includes("não mexa ainda"));
-      await key(app, KEY.down); // back onto the toggle…
-      await key(app, KEY.up); // …then up to the convo
+      if (isTmpDir(target)) {
+        await key(app, KEY.down); // back onto the toggle…
+        await key(app, KEY.up); // …then up to the convo
+      } else await key(app, KEY.down); // straight from the section toggle
       await key(app, "T"); // arm
       await waitFrame(app, (f) => f.includes("T de novo"));
       await key(app, KEY.up); // move away…
@@ -631,6 +640,203 @@ describe("tui", () => {
         } catch {
           /* already dead */
         }
+      }
+      rmSync(fake, { force: true });
+    }
+  }, 30000);
+
+  test("a live convo relaunches in its process cwd, not the transcript's", async () => {
+    const { rootA, rootB } = setupEnv();
+    const recorded = join(rootA, "proj"); // exists, but the agent runs elsewhere
+    const actual = join(rootB, "other");
+    const id = "16161616-1616-4616-8616-161616161616";
+    const home = join(rootA, "..", "claude-cwd");
+    mkdirSync(join(home, "projects", "p"), { recursive: true });
+    writeFileSync(
+      join(home, "projects", "p", `${id}.jsonl`),
+      JSON.stringify({ type: "user", cwd: recorded, message: { role: "user", content: "rodando em outro lugar" } }) + "\n",
+    );
+    process.env.ATLAS_CLAUDE_HOME = home;
+    const fake = join(actual, "claude");
+    writeFileSync(fake, "#!/bin/sh\nsleep 30\n");
+    chmodSync(fake, 0o755);
+    const proc = Bun.spawn([fake, "--resume", id], { cwd: actual, stdout: "ignore", stderr: "ignore" });
+    let migrated: Choice | undefined;
+    const noop = () => {};
+    try {
+      await waitFor(() => runningResumeIds().has(id));
+      const app = mount(
+        <Hub
+          onMigrate={(c) => {
+            migrated = c;
+            return { ok: true, name: "atlas-x" };
+          }}
+          domains={[]}
+          onOpen={noop}
+          onViewRunning={noop}
+          onNewSession={noop}
+          onDrill={noop}
+          onQuit={noop}
+        />,
+      );
+      try {
+        await waitFrame(app, (f) => f.includes("agora") && f.includes("rodando em outro lugar"));
+        await key(app, "T"); // the live convo leads the agora section
+        await waitFrame(app, (f) => f.includes("T de novo para migrar"));
+        await key(app, "T");
+        await waitFor(() => migrated !== undefined);
+        expect(migrated).toEqual({ dir: actual, runtime: "claude", resume: id });
+      } finally {
+        app.unmount();
+      }
+    } finally {
+      try {
+        proc.kill();
+      } catch {
+        /* already dead */
+      }
+      rmSync(fake, { force: true });
+    }
+  }, 30000);
+
+  test("a tmux that does not run refuses T before stopping anything", async () => {
+    const { rootA } = setupEnv();
+    process.env.ATLAS_TMUX_BIN = join(rootA, "no-such-tmux"); // configured, not runnable
+    const target = join(rootA, "proj");
+    const id = "17171717-1717-4717-8717-171717171717";
+    record(target, "muse");
+    const fake = join(target, "muse");
+    writeFileSync(fake, "#!/bin/sh\nsleep 30\n");
+    chmodSync(fake, 0o755);
+    const proc = Bun.spawn([fake, "resume", id], { cwd: target, stdout: "ignore", stderr: "ignore" });
+    let migrated = false;
+    const noop = () => {};
+    try {
+      await waitForLive(proc.pid, `${target}\0muse`);
+      const app = mount(
+        <Hub
+          onMigrate={() => {
+            migrated = true;
+            return { ok: true };
+          }}
+          domains={[]}
+          onOpen={noop}
+          onViewRunning={noop}
+          onNewSession={noop}
+          onDrill={noop}
+          onQuit={noop}
+        />,
+      );
+      try {
+        await waitFrame(app, (f) => f.includes("agora"));
+        await key(app, "T");
+        await waitFrame(app, (f) => f.includes("tmux não executa"));
+        await key(app, "T");
+        await sleep(300);
+        expect(migrated).toBe(false);
+        expect(() => process.kill(proc.pid, 0)).not.toThrow();
+      } finally {
+        app.unmount();
+      }
+    } finally {
+      try {
+        proc.kill();
+      } catch {
+        /* already dead */
+      }
+      rmSync(fake, { force: true });
+    }
+  }, 30000);
+
+  test("Running: T on a session that died after opening says so, without pointing at Enter", async () => {
+    const { rootA } = setupEnv();
+    const target = join(rootA, "proj");
+    const fake = join(target, "muse");
+    writeFileSync(fake, "#!/bin/sh\nsleep 30\n");
+    chmodSync(fake, 0o755);
+    const proc = Bun.spawn([fake, "resume", "18181818-1818-4818-8818-181818181818"], {
+      cwd: target,
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    const noop = () => {};
+    try {
+      await waitForLive(proc.pid, `${target}\0muse`);
+      const app = mount(
+        <Running
+          target={{ kind: "session", session: { dir: target, runtime: "muse", last_used: new Date().toISOString(), uses: 1 } }}
+          onBack={noop}
+          onQuit={noop}
+          onLaunch={noop}
+          onAttach={noop}
+          onMigrate={() => ({ ok: true })}
+        />,
+      );
+      try {
+        await waitFrame(app, (f) => f.includes("já está rodando"));
+        proc.kill();
+        await waitFor(() => pidsForKey(target, "muse").length === 0);
+        await key(app, "T");
+        const frame = await waitFrame(app, (f) => f.includes("o processo já encerrou"));
+        expect(frame).not.toContain("Enter abre");
+      } finally {
+        app.unmount();
+      }
+    } finally {
+      try {
+        proc.kill();
+      } catch {
+        /* already dead */
+      }
+      rmSync(fake, { force: true });
+    }
+  }, 30000);
+
+  test("Running: esc is ignored mid-migration and the screen pops exactly once", async () => {
+    const { rootA } = setupEnv();
+    const target = join(rootA, "proj");
+    const id = "19191919-1919-4919-8919-191919191919";
+    const fake = join(target, "muse");
+    // ignores SIGTERM: termination takes the full grace period, then SIGKILL
+    writeFileSync(fake, "#!/bin/sh\ntrap '' TERM\nwhile :; do sleep 1; done\n");
+    chmodSync(fake, 0o755);
+    const proc = Bun.spawn([fake, "resume", id], { cwd: target, stdout: "ignore", stderr: "ignore" });
+    const events: string[] = [];
+    try {
+      await waitFor(() => runningResumeIds().has(id));
+      const convo: NativeSession = { harness: "muse", id, dir: target, preview: null, updatedAt: Date.now(), file: join(target, "s.jsonl") };
+      const app = mount(
+        <Running
+          target={{ kind: "convo", convo }}
+          onBack={() => events.push("back")}
+          onQuit={() => events.push("quit")}
+          onLaunch={() => {}}
+          onAttach={() => {}}
+          onMigrate={() => {
+            events.push("relaunch");
+            return { ok: true };
+          }}
+        />,
+      );
+      try {
+        await waitFrame(app, (f) => f.includes(`resume: ${id}`));
+        await key(app, "T");
+        await waitFrame(app, (f) => f.includes("T de novo"));
+        await key(app, "T");
+        await waitFrame(app, (f) => f.includes("encerrando aqui para migrar"));
+        await key(app, KEY.esc); // mid-flight: must not leave
+        await waitFor(() => events.includes("relaunch"), 8000);
+        await waitFor(() => events.includes("back"));
+        await sleep(100);
+        expect(events).toEqual(["relaunch", "back"]);
+      } finally {
+        app.unmount();
+      }
+    } finally {
+      try {
+        proc.kill(9);
+      } catch {
+        /* already dead */
       }
       rmSync(fake, { force: true });
     }
