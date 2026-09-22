@@ -95,6 +95,7 @@ export default function App({ onDone, start }: Props) {
       onNewSession={() => push({ name: "dir", title: "Nova sessão", domain: null })}
       onDrill={(domain) => push({ name: "dir", title: domain, domain })}
       onQuit={() => onDone(null)}
+      onMigrate={(c) => launchDetached(c.dir, c.runtime, c.resume)}
     />
   );
 }

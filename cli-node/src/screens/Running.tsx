@@ -5,12 +5,14 @@ import type { Choice } from "../App";
 import type { Session } from "../history";
 import type { NativeSession } from "../native/index";
 import { TRANSCRIPT_PEEK, peekTranscript, type PeekLine } from "../native/peek";
-import { pidsForKey, pidsForResume, procStartedAt, resumeIdsForPids, terminatePids } from "../process";
+import { convoMigration, runMigration, sessionMigration, type MigrateResult } from "../migrate";
+import { pidsForKey, pidsForResume, procStartedAt, terminatePids } from "../process";
 import { convoDisplay, sessionDisplay } from "../rows";
 import { RUNTIME_COLOR, RUNTIME_ICON, TMUX_MARK, theme } from "../theme";
 import { capturePane, hasSession, killSession } from "../tmux";
 import { ago, shorten } from "../util";
-import { Dim, HintBar, StatusLine, Title } from "../components/chrome";
+import { Dim, HintBar, MIN_LIST_ROWS, StatusLine, Title, voyageRows } from "../components/chrome";
+import Voyage from "../components/Voyage";
 
 export type RunningTarget =
   | { kind: "session"; session: Session; tmux?: string }
@@ -23,7 +25,7 @@ interface Props {
   onLaunch: (c: Choice) => void;
   onAttach: (c: Choice) => void;
   /** Background migrate into tmux (never attaches); App pops to Hub on ok. */
-  onMigrate: (c: Choice) => { ok: boolean; error?: string };
+  onMigrate: (c: Choice) => MigrateResult;
 }
 
 interface ProcInfo {
@@ -42,26 +44,20 @@ function resolveProcs(t: RunningTarget): ProcInfo[] {
   });
 }
 
-type SessionMigrate = { pids: number[]; id: string } | { refuse: string };
-
-/** What a history session migrates with: its live pids plus the single
- *  resume id they hold. Anything else refuses with guidance instead of
- *  guessing (a wrong resume would orphan the real conversation). */
-function resolveSessionMigrate(dir: string, runtime: string): SessionMigrate {
-  if (runtime === "shell") {
-    return { refuse: "shell não tem conversa para retomar — abra uma nova sessão no tmux com n no Hub." };
-  }
-  const pids = pidsForKey(dir, runtime);
-  if (pids.length === 0) return { refuse: "o processo já encerrou — esc volta ao Hub." };
-  const ids = resumeIdsForPids(pids);
-  if (ids.length === 0) {
-    return {
-      refuse:
-        "esse processo não tem resume id — encerre com X e reabra a conversa pelo Hub para ir ao tmux.",
-    };
-  }
-  if (ids.length > 1) return { refuse: "vários resumes nesse grupo — migre a conversa pelo Hub." };
-  return { pids, id: ids[0] };
+/** Rows the management view draws around its list, per variant (keep in
+ *  sync with the JSX below): an Ink frame taller than the terminal is fully
+ *  cleared and redrawn on every render — each boat tick included. */
+export function runningChromeRows(
+  v: { convo: boolean; ended: boolean; tmux: boolean; procs: number },
+  rows: number,
+): number {
+  const title = 2; // Title + margin
+  const info = 2; // runtime · dir + margin
+  const resume = v.convo ? 2 : 0; // resume: <id> + margin
+  const warning = v.ended ? 2 : v.tmux ? 3 + (v.procs > 0 ? 1 : 0) : 4; // block + margin
+  const listHeader = !v.ended && (v.tmux || v.convo) ? 2 : 0; // "— log · …" / placeholder + margin
+  const footer = 1 + 2; // StatusLine + HintBar (margin + 1)
+  return title + info + resume + warning + listHeader + footer + voyageRows(rows);
 }
 
 export default function Running({ target, onBack, onQuit, onLaunch, onAttach, onMigrate }: Props) {
@@ -94,7 +90,12 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach, on
   const icon = RUNTIME_ICON[runtime] ?? "•";
   const iconColor = RUNTIME_COLOR[runtime] ?? theme.text;
 
-  const listHeight = Math.max(5, (stdout?.rows || 24) - 12);
+  const rows = stdout?.rows || 24;
+  const listHeight = Math.max(
+    MIN_LIST_ROWS,
+    rows -
+      runningChromeRows({ convo: target.kind === "convo", ended, tmux: tmux !== null, procs: procs.length }, rows),
+  );
   const totalLines = tmux ? tmuxLines.length : peekLines.length;
   const maxHidden = Math.max(0, totalLines - listHeight);
   const hidden = Math.min(hiddenTail, maxHidden);
@@ -137,50 +138,20 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach, on
     setMsg(`não consegui encerrar o PID ${result.alive.join(", ")} — sem permissão?`);
   };
 
-  /** Move an external session under tmux, staying in Atlas: its pid(s) must
-   *  die first (a duplicate resume corrupts the session), then the same
-   *  conversation relaunches detached. Aborts if anything stays alive. */
+  /** Move an external session under tmux, staying in Atlas (see migrate.ts). */
   const migrate = async () => {
     if (killing) return;
-    let pids: number[];
-    let dir: string;
-    let runtime: string;
-    let resume: string;
-    if (target.kind === "convo") {
-      pids = pidsForResume(target.convo.id);
-      dir = target.convo.dir ?? homedir();
-      runtime = target.convo.harness;
-      resume = target.convo.id;
-    } else {
-      const r = resolveSessionMigrate(target.session.dir, target.session.runtime);
-      if (!("id" in r)) {
-        setMsg(r.refuse);
-        return;
-      }
-      pids = r.pids;
-      dir = target.session.dir;
-      runtime = target.session.runtime;
-      resume = r.id;
+    const m = target.kind === "convo" ? convoMigration(target.convo) : sessionMigration(target.session, "o processo já encerrou — esc volta ao Hub.");
+    if ("refuse" in m) {
+      setMsg(m.refuse);
+      return;
     }
     setKilling(true);
     try {
-      const relaunch = () => {
-        const r = onMigrate({ dir, runtime, resume });
-        // back to Hub on success: fresh lists show the 𖥠 immediately
-        if (!r.ok) setMsg(r.error ?? "não consegui criar a sessão tmux.");
-        else onBack();
-      };
-      if (pids.length === 0) {
-        relaunch(); // died on its own: revive straight into tmux
-        return;
-      }
-      setMsg("encerrando aqui para migrar…");
-      const result = await terminatePids(pids);
-      if (result.alive.length > 0) {
-        setMsg(`não consegui encerrar o PID ${result.alive.join(", ")} — migração abortada.`);
-        return;
-      }
-      relaunch();
+      const r = await runMigration(m, onMigrate, setMsg);
+      // back to Hub on success: fresh lists show the 𖥠 immediately
+      if (r.ok) onBack();
+      else setMsg(r.error!);
     } finally {
       setKilling(false);
     }
@@ -251,9 +222,9 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach, on
       if (!armedMigrate) {
         // sessions pre-resolve: refuse now instead of arming a dead end
         if (target.kind === "session") {
-          const r = resolveSessionMigrate(target.session.dir, target.session.runtime);
-          if (!("id" in r)) {
-            setMsg(r.refuse);
+          const m = sessionMigration(target.session, "o processo já encerrou — esc volta ao Hub.");
+          if ("refuse" in m) {
+            setMsg(m.refuse);
             return;
           }
         }
@@ -277,7 +248,7 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach, on
             : "Sessão em execução · somente leitura"}
       </Title>
       <Box marginBottom={1}>
-        <Text>
+        <Text wrap="truncate">
           <Text color={iconColor}>{`${icon} `}</Text>
           <Text color={theme.text}>{`${runtime} ${name}`}</Text>
           <Text dimColor>{`  ·  ${dir ? shorten(dir) : "—"}`}</Text>
@@ -290,7 +261,7 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach, on
       )}
       {ended ? (
         <Box marginBottom={1}>
-          <Text color={theme.amber}>
+          <Text color={theme.amber} wrap="truncate">
             ⚠ a sessão encerrou sozinha antes de abrir — Enter abre agora, esc volta.
           </Text>
         </Box>
@@ -377,6 +348,7 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach, on
                 ]
         }
       />
+      <Voyage />
     </Box>
   );
 }

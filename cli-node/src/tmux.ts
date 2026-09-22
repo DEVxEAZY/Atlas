@@ -16,10 +16,12 @@ export const TMUX_PREFIX = "atlas-";
 const MAX_SUFFIX = 9;
 
 /** tmux binary: an explicit `ATLAS_TMUX_BIN` wins (tests point it at the
- *  stub), otherwise resolve from PATH. Note `Bun.which` snapshots PATH at
+ *  stub; empty means "no tmux"), otherwise resolve from PATH. Note `Bun.which` snapshots PATH at
  *  startup, so runtime PATH games would not work — hence the override. */
 export function tmuxBin(): string | null {
-  return process.env.ATLAS_TMUX_BIN ?? which("tmux");
+  const override = process.env.ATLAS_TMUX_BIN;
+  if (override !== undefined) return override || null; // "" = no tmux (direct mode)
+  return which("tmux");
 }
 
 export function tmuxAvailable(): boolean {
@@ -144,6 +146,22 @@ export interface DetachedLaunch {
   error?: string;
 }
 
+/** Why a detached tmux launch of (dir, runtime) cannot work, or null.
+ *  Migration runs this BEFORE stopping anything: a conversation killed for a
+ *  relaunch that was never possible is simply lost. */
+export function detachedPreflight(dir: string, runtime: string): string | null {
+  if (!isDir(dir)) return `diretório não existe: ${dir}`;
+  let def;
+  try {
+    def = getRuntime(runtime);
+  } catch {
+    return `runtime desconhecido: ${runtime}`;
+  }
+  if (!isAvailable(def)) return `runtime '${runtime}' não encontrado no PATH.`;
+  if (!tmuxBin()) return "tmux não instalado — a migração precisa do tmux.";
+  return null;
+}
+
 /** Create a tmux session and leave it detached (background migrate): never
  *  records history, never attaches. Reuses the session when it exists.
  *  Verifies the session survives a grace period: a runtime that crashes on
@@ -154,18 +172,9 @@ export function launchDetached(
   resume?: string,
   graceMs = 400,
 ): DetachedLaunch {
-  if (!isDir(dir)) return { ok: false, error: `diretório não existe: ${dir}` };
-  let def;
-  try {
-    def = getRuntime(runtime);
-  } catch {
-    return { ok: false, error: `runtime desconhecido: ${runtime}` };
-  }
-  if (!isAvailable(def)) {
-    return { ok: false, error: `runtime '${runtime}' não encontrado no PATH.` };
-  }
-  const bin = tmuxBin();
-  if (!bin) return { ok: false, error: "tmux não instalado — a migração precisa do tmux." };
+  const why = detachedPreflight(dir, runtime);
+  if (why) return { ok: false, error: why };
+  const bin = tmuxBin()!;
   let plan;
   try {
     plan = planLaunch({

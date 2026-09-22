@@ -38,6 +38,7 @@ import {
   listTmuxPanes,
   matchAtlasSession,
   matchAtlasSessionDeep,
+  tmuxAvailable,
   tmuxBaseName,
   type TmuxFallback,
   type TmuxPane,
@@ -54,6 +55,7 @@ import {
   Title,
   listHeightFor,
 } from "../components/chrome";
+import Voyage from "../components/Voyage";
 import { useLiveIndex } from "../components/useLiveIndex";
 import { useSpinner } from "../components/useSpinner";
 import {
@@ -68,6 +70,7 @@ import {
   terminatePids,
 } from "../process";
 import type { Choice } from "../App";
+import { convoMigration, runMigration, sessionMigration, type MigrateResult, type Migration } from "../migrate";
 import type { RunningTarget } from "./Running";
 
 export const RECENT_LIMIT = 10;
@@ -75,8 +78,9 @@ export const RECENT_LIMIT = 10;
 /** Left-column width that fits the full filter hint (57 chars + "/ "). */
 export const FULL_HINT_MIN_LEFT = 59;
 
-/** Hint sets: the full list-mode set, its narrow essential subset, and the
- *  short filter-mode set (always fits). HINTS_FULL_MIN_COLS tracks the full
+/** Hint sets: the full list-mode set (no `/`: the filter placeholder right
+ *  above already says it), its narrow essential subset, and the short
+ *  filter-mode set (always fits). HINTS_FULL_MIN_COLS tracks the full
  *  set's rendered width + 4 root padding so the bar never wraps. */
 export const HINTS_FULL: Array<[string, string]> = [
   ["Enter", "abrir"],
@@ -84,7 +88,7 @@ export const HINTS_FULL: Array<[string, string]> = [
   ["r", "runtime"],
   ["d", "remover"],
   ["X", "matar"],
-  ["/", "filtrar"],
+  ["T", "tmux"],
   ["q", "sair"],
 ];
 export const HINTS_SHORT: Array<[string, string]> = [
@@ -118,6 +122,8 @@ interface Props {
   onNewSession: () => void;
   onDrill: (domain: string) => void;
   onQuit: () => void;
+  /** Background relaunch into tmux (never attaches). */
+  onMigrate: (c: Choice) => MigrateResult;
 }
 
 function SessionContent({
@@ -262,6 +268,7 @@ export default function Hub({
   onNewSession,
   onDrill,
   onQuit,
+  onMigrate,
 }: Props) {
   const [sessions, setSessions] = useState<Session[]>(() => load());
   const [convos] = useState<NativeSession[]>(() => loadNativeSessions());
@@ -332,7 +339,11 @@ export default function Hub({
   const [msg, setMsg] = useState("");
   /** Row key armed by the first X (second X on the same row kills). */
   const [armedKill, setArmedKill] = useState<string | null>(null);
+  /** Row key armed by the first T (second T on the same row migrates). */
+  const [armedMigrate, setArmedMigrate] = useState<string | null>(null);
   const [killing, setKilling] = useState(false);
+  // no tmux, no migration: the T hint only shows where it can work
+  const [tmuxOk] = useState(() => tmuxAvailable());
   const { stdout } = useStdout();
   const spin = useSpinner(running.size > 0 || liveResumes.size > 0 || tmuxSessions.size > 0);
   const isRunning = (s: Session): boolean =>
@@ -418,6 +429,33 @@ export default function Hub({
     refreshLive();
     if (result.alive.length === 0) setMsg(`encerrado: ${info.label}.`);
     else setMsg(`não consegui encerrar o PID ${result.alive.join(", ")} — sem permissão?`);
+  };
+
+  /** What T does on a row: rows already in tmux (or with nothing to move)
+   *  refuse with guidance; see migrate.ts for the rest. */
+  const migrationFor = (row: HubRow): Migration => {
+    if (row.t === "tmux") return { refuse: "já está no tmux — Enter entra." };
+    if (row.t === "session") {
+      if (tmuxForSession(row.session)) return { refuse: "já está no tmux — Enter entra." };
+      return sessionMigration(row.session);
+    }
+    if (row.t === "convo") {
+      if (tmuxForConvo(row.convo)) return { refuse: "já está no tmux — Enter entra." };
+      return convoMigration(row.convo);
+    }
+    return { refuse: "nada para levar ao tmux nessa linha." };
+  };
+
+  const migrateRow = async (row: HubRow): Promise<void> => {
+    // re-resolve: the process may have died or moved since the first T
+    const m = migrationFor(row);
+    if ("refuse" in m) {
+      setMsg(m.refuse);
+      return;
+    }
+    const r = await runMigration(m, onMigrate, setMsg);
+    refreshLive();
+    setMsg(r.ok ? `no tmux em 2º plano: ${r.name ?? "sessão criada"} — Enter entra.` : r.error!);
   };
 
   // /tmp convos stay hidden unless asked for — except live ones, which
@@ -724,6 +762,13 @@ export default function Hub({
       onQuit();
       return;
     }
+    // a kill or migration is between SIGTERM and relaunch: leaving now would
+    // strand the agent stopped and never resumed
+    if (killing) return;
+    // an armed X/T only survives its own second press: moving, filtering or
+    // any other key disarms, so a later lone press never acts unprompted
+    if (input !== "T" || key.ctrl || key.meta) setArmedMigrate(null);
+    if (input !== "X" || key.ctrl || key.meta) setArmedKill(null);
     if (focus === "filter") {
       if (key.upArrow || key.downArrow) {
         setIndex((prev) => moveIndex(rows, prev ?? 0, key.upArrow ? -1 : 1));
@@ -770,6 +815,29 @@ export default function Hub({
         setSessions(sessions.filter((x) => x !== at.session));
         setMsg("Sessão removida do histórico.");
       }
+    } else if (input === "T" && !key.ctrl && !key.meta && !killing) {
+      const at = indexRef.current !== null ? rows[indexRef.current] : undefined;
+      const m = at ? migrationFor(at) : null;
+      if (!at || !m || "refuse" in m) {
+        setArmedMigrate(null);
+        setMsg(m && "refuse" in m ? m.refuse : "nada para levar ao tmux nessa linha.");
+        return;
+      }
+      // arm on what the second T will actually do: if the row flips between
+      // "open detached" and "stop and move" in between, ask again
+      const k = `${rowKey(at)}\0${m.pids.length > 0 ? "stop" : "open"}`;
+      if (armedMigrate !== k) {
+        setArmedMigrate(k);
+        setMsg(
+          m.pids.length > 0
+            ? "T de novo para migrar para o tmux (encerra aqui, continua lá em 2º plano)."
+            : "T de novo para abrir no tmux em 2º plano.",
+        );
+        return;
+      }
+      setArmedMigrate(null);
+      setKilling(true);
+      void migrateRow(at).finally(() => setKilling(false));
     } else if (input === "X" && !key.ctrl && !key.meta && !killing) {
       const at = indexRef.current !== null ? rows[indexRef.current] : undefined;
       const info = at ? killableFor(at) : null;
@@ -936,10 +1004,11 @@ export default function Hub({
           focus === "filter"
             ? HINTS_FILTER
             : columns >= HINTS_FULL_MIN_COLS
-              ? HINTS_FULL
+              ? HINTS_FULL.filter(([k]) => tmuxOk || k !== "T")
               : HINTS_SHORT
         }
       />
+      <Voyage />
     </Box>
   );
 }

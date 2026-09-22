@@ -6,6 +6,7 @@ import { firstItemIndex, moveIndex } from "../rows";
 import { fit, shorten } from "../util";
 import { theme } from "../theme";
 import { Dim, HeaderRow, HintBar, ItemRow, StatusLine, Title } from "../components/chrome";
+import Voyage from "../components/Voyage";
 import { useLiveIndex } from "../components/useLiveIndex";
 
 type Row = { t: "header"; label: string } | { t: "item"; runtime: Runtime };
@@ -110,6 +111,7 @@ export default function Runtime({ dir, onPick, onBack, onQuit }: Props) {
           ["esc", "voltar"],
         ]}
       />
+      <Voyage />
     </Box>
   );
 }

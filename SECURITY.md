@@ -2,8 +2,9 @@
 
 ## Supported versions
 
-Security fixes target the latest published Atlas release in the `0.1.x`
-series. Older releases and the legacy Python prototype in `cli/` do not
+Security fixes target the latest published Atlas release (currently the
+`0.3.x` series, on npm as `@devxeazy/atlas-cli` and as GitHub Release
+binaries). Older releases and the legacy Python prototype in `cli/` do not
 receive dedicated security backports. Upgrade to the latest release before
 checking whether a previously reported issue is fixed. This volunteer
 project does not promise a response or remediation SLA.

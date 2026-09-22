@@ -1,7 +1,7 @@
 {
   "name": "atlas-cli",
-  "version": "0.2.0",
-  "description": "Terminal session manager for coding agents, backed by tmux.",
+  "version": "0.3.0",
+  "description": "Find, preview, and re-enter your Codex, Claude, Muse, and shell sessions from one terminal hub, backed by tmux.",
   "private": true,
   "license": "MIT",
   "repository": {
@@ -13,8 +13,18 @@
     "url": "https://github.com/DEVxEAZY/atlas-cli/issues"
   },
   "keywords": [
+    "ai-agents",
+    "bun",
+    "claude",
+    "claude-code",
     "cli",
+    "codex",
     "coding-agents",
+    "developer-tools",
+    "ink",
+    "linux",
+    "muse",
+    "session-manager",
     "terminal",
     "tmux",
     "tui"

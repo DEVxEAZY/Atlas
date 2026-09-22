@@ -2,7 +2,7 @@ import { describe, expect, spyOn, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { here, launch, parseArgs, planHere } from "../src/main.tsx";
+import { RENDER_OPTIONS, here, launch, parseArgs, planHere } from "../src/main.tsx";
 import type { Session } from "../src/history";
 import { tmuxBaseName, type TmuxSession } from "../src/tmux";
 import { fakeCalls, setupFakeTmux } from "./tmux-fake";
@@ -123,6 +123,10 @@ describe("atlas DIR", () => {
       fake.restore();
       rmSync(base, { recursive: true, force: true });
     }
+  });
+
+  test("the TUI renders on the alternate screen", () => {
+    expect(RENDER_OPTIONS).toMatchObject({ alternateScreen: true });
   });
 
   test("a missing directory fails with 2", async () => {

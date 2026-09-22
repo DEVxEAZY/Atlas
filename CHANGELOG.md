@@ -2,6 +2,26 @@
 
 All notable changes to Atlas are documented in this file.
 
+## [0.3.0] - 2026-09-22
+
+- Double `T` in the Hub moves the selected row into tmux in the background:
+  a session or conversation running elsewhere is stopped and resumed in a
+  detached tmux session; an idle conversation opens there directly. The
+  management view shares the same migration logic.
+- Fixed scrolling glitches on many terminals: the TUI now draws on the
+  alternate screen (like vim or htop), so the mouse wheel no longer scrolls
+  back through stale frames and the shell screen is restored on exit. List
+  rows, titles, headers and hints truncate instead of wrapping; a wrapped
+  row made frames taller than the terminal, which Ink redraws with a full
+  clear on every tick.
+- A little ASCII boat sails the footer of every screen as an endless
+  loading loop. `ATLAS_NO_BOAT=1` hides it; terminals shorter than 18 rows
+  skip it automatically.
+- The wide Hub hint bar lists `T tmux` and drops `/ filtrar`, which the
+  filter placeholder already shows.
+- README install links follow the latest release; added a WSL note for the
+  `EBADPLATFORM` error when Windows `npm` runs inside WSL.
+
 ## [0.2.0] - 2026-09-22
 
 - Published on npm as `@devxeazy/atlas-cli` (requires Bun on `PATH`).

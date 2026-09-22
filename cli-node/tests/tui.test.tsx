@@ -11,11 +11,15 @@ import { load, record } from "../src/history";
 import { pidsForKey, runningKeys, runningResumeIds } from "../src/process";
 import type { NativeSession } from "../src/native/index";
 import { KEY, LIVE_SPIN_RE, burst, key, mount, sleep, waitFor, waitFrame } from "./ink-helpers";
+import { setupFakeTmux, type FakeTmux } from "./tmux-fake";
 
 let tmpdirs: string[] = [];
+let fakeTmux: FakeTmux[] = [];
 afterEach(() => {
   for (const d of tmpdirs) rmSync(d, { recursive: true, force: true });
   tmpdirs = [];
+  for (const f of fakeTmux.reverse()) f.restore();
+  fakeTmux = [];
   delete process.env.ATLAS_HISTORY_FILE;
   delete process.env.ATLAS_ROOTS;
   delete process.env.TMUX_TMPDIR;
@@ -37,6 +41,8 @@ function setupEnv(): { rootA: string; rootB: string } {
   // (tmux falls back to /tmp when TMUX_TMPDIR does not exist at all)
   mkdirSync(join(base, "notmux"), { recursive: true });
   process.env.TMUX_TMPDIR = join(base, "notmux");
+  // …and a present-but-empty tmux, so migration preflights pass on any box
+  fakeTmux.push(setupFakeTmux());
   const empty = join(base, "empty-native");
   mkdirSync(empty, { recursive: true });
   process.env.ATLAS_CLAUDE_HOME = empty;
@@ -370,6 +376,337 @@ describe("tui", () => {
     }
   });
 
+  test("T T in the hub migrates a live session into tmux", async () => {
+    const { rootA } = setupEnv();
+    const target = join(rootA, "proj");
+    const id = "cccccccc-3333-4333-8333-333333333333";
+    record(target, "muse");
+    const fake = join(target, "muse");
+    writeFileSync(fake, "#!/bin/sh\nsleep 30\n");
+    chmodSync(fake, 0o755);
+    const proc = Bun.spawn([fake, "resume", id], { cwd: target, stdout: "ignore", stderr: "ignore" });
+    let migrated: Choice | undefined;
+    let opened: Choice | undefined;
+    const noop = () => {};
+    try {
+      await waitForLive(proc.pid, `${target}\0muse`);
+      const app = mount(
+        <Hub
+          onMigrate={(c) => {
+            migrated = c;
+            return { ok: true, name: "atlas-proj-muse-x" };
+          }}
+          domains={[]}
+          onOpen={(c) => (opened = c)}
+          onViewRunning={noop}
+          onNewSession={noop}
+          onDrill={noop}
+          onQuit={noop}
+        />,
+      );
+      try {
+        await waitFrame(app, (f) => f.includes("agora"));
+        await key(app, "T"); // the live row under agora is selected
+        await waitFrame(app, (f) => f.includes("T de novo para migrar"));
+        await key(app, "T");
+        await waitFor(() => migrated !== undefined);
+        expect(migrated).toEqual({ dir: target, runtime: "muse", resume: id });
+        await waitFrame(app, (f) => f.includes("no tmux em 2º plano: atlas-proj-muse-x"));
+        await waitFor(() => {
+          try {
+            process.kill(proc.pid, 0);
+            return false;
+          } catch {
+            return true;
+          }
+        });
+        expect(opened).toBeUndefined(); // background: never attaches
+      } finally {
+        app.unmount();
+      }
+    } finally {
+      try {
+        proc.kill();
+      } catch {
+        /* already dead */
+      }
+      rmSync(fake, { force: true });
+    }
+  }, 30000);
+
+  test("T T in the hub opens an idle convo detached in tmux", async () => {
+    const { rootA } = setupEnv();
+    const target = join(rootA, "proj");
+    const id = "12121212-1212-4212-8212-121212121212";
+    const home = join(rootA, "..", "claude-idle");
+    mkdirSync(join(home, "projects", "p"), { recursive: true });
+    writeFileSync(
+      join(home, "projects", "p", `${id}.jsonl`),
+      JSON.stringify({ type: "user", cwd: target, message: { role: "user", content: "retomar em segundo plano" } }) + "\n",
+    );
+    process.env.ATLAS_CLAUDE_HOME = home;
+    let migrated: Choice | undefined;
+    const noop = () => {};
+    const app = mount(
+      <Hub
+        onMigrate={(c) => {
+          migrated = c;
+          return { ok: true, name: "atlas-x" };
+        }}
+        domains={[]}
+        onOpen={noop}
+        onViewRunning={noop}
+        onNewSession={noop}
+        onDrill={noop}
+        onQuit={noop}
+      />,
+    );
+    try {
+      await waitFrame(app, (f) => f.includes("Conversas"));
+      await key(app, KEY.down); // convos toggle
+      await key(app, KEY.enter); // expand
+      // the temp project lives under /tmp, hidden by default: reveal it
+      await waitFrame(app, (f) => f.includes("mostrar conversas de /tmp"));
+      await key(app, KEY.down, 3); // clamp onto the /tmp toggle (last row)
+      await key(app, KEY.enter);
+      await waitFrame(app, (f) => f.includes("retomar em segundo plano"));
+      await key(app, KEY.down); // back onto the toggle…
+      await key(app, KEY.up); // …then up to the convo
+      await key(app, "T");
+      await waitFrame(app, (f) => f.includes("T de novo para abrir no tmux em 2º plano"));
+      await key(app, "T");
+      await waitFor(() => migrated !== undefined);
+      expect(migrated).toEqual({ dir: target, runtime: "claude", resume: id });
+    } finally {
+      app.unmount();
+    }
+  });
+
+  test("moving the cursor disarms T: a later lone T only asks again", async () => {
+    const { rootA } = setupEnv();
+    const target = join(rootA, "proj");
+    const id = "13131313-1313-4313-8313-131313131313";
+    const home = join(rootA, "..", "claude-arm");
+    mkdirSync(join(home, "projects", "p"), { recursive: true });
+    writeFileSync(
+      join(home, "projects", "p", `${id}.jsonl`),
+      JSON.stringify({ type: "user", cwd: target, message: { role: "user", content: "não mexa ainda" } }) + "\n",
+    );
+    process.env.ATLAS_CLAUDE_HOME = home;
+    let migrated = false;
+    const noop = () => {};
+    const app = mount(
+      <Hub
+        onMigrate={() => {
+          migrated = true;
+          return { ok: true };
+        }}
+        domains={[]}
+        onOpen={noop}
+        onViewRunning={noop}
+        onNewSession={noop}
+        onDrill={noop}
+        onQuit={noop}
+      />,
+    );
+    try {
+      await waitFrame(app, (f) => f.includes("Conversas"));
+      await key(app, KEY.down); // convos toggle
+      await key(app, KEY.enter); // expand
+      // the temp project lives under /tmp, hidden by default: reveal it
+      await waitFrame(app, (f) => f.includes("mostrar conversas de /tmp"));
+      await key(app, KEY.down, 3); // clamp onto the /tmp toggle (last row)
+      await key(app, KEY.enter);
+      await waitFrame(app, (f) => f.includes("não mexa ainda"));
+      await key(app, KEY.down); // back onto the toggle…
+      await key(app, KEY.up); // …then up to the convo
+      await key(app, "T"); // arm
+      await waitFrame(app, (f) => f.includes("T de novo"));
+      await key(app, KEY.up); // move away…
+      await key(app, KEY.down); // …and back
+      await key(app, "T"); // must arm again, not fire
+      await waitFrame(app, (f) => f.includes("T de novo"));
+      await sleep(100);
+      expect(migrated).toBe(false);
+    } finally {
+      app.unmount();
+    }
+  });
+
+  test("without tmux, T refuses before stopping anything and the hint is hidden", async () => {
+    const { rootA } = setupEnv();
+    process.env.ATLAS_TMUX_BIN = ""; // no tmux (the fake's restore puts it back)
+    const target = join(rootA, "proj");
+    const id = "14141414-1414-4414-8414-141414141414";
+    record(target, "muse");
+    const fake = join(target, "muse");
+    writeFileSync(fake, "#!/bin/sh\nsleep 30\n");
+    chmodSync(fake, 0o755);
+    const proc = Bun.spawn([fake, "resume", id], { cwd: target, stdout: "ignore", stderr: "ignore" });
+    let migrated = false;
+    const noop = () => {};
+    try {
+      await waitForLive(proc.pid, `${target}\0muse`);
+      const app = mount(
+        <Hub
+          onMigrate={() => {
+            migrated = true;
+            return { ok: true };
+          }}
+          domains={[]}
+          onOpen={noop}
+          onViewRunning={noop}
+          onNewSession={noop}
+          onDrill={noop}
+          onQuit={noop}
+        />,
+      );
+      try {
+        const frame = await waitFrame(app, (f) => f.includes("agora"));
+        expect(frame).not.toContain("T tmux");
+        await key(app, "T");
+        await waitFrame(app, (f) => f.includes("tmux não instalado"));
+        await key(app, "T");
+        await sleep(300);
+        expect(migrated).toBe(false);
+        expect(() => process.kill(proc.pid, 0)).not.toThrow(); // still alive
+      } finally {
+        app.unmount();
+      }
+    } finally {
+      try {
+        proc.kill();
+      } catch {
+        /* already dead */
+      }
+      rmSync(fake, { force: true });
+    }
+  }, 30000);
+
+  test("T refuses a group where one process has no resume id, stopping nothing", async () => {
+    const { rootA } = setupEnv();
+    const target = join(rootA, "proj");
+    const id = "15151515-1515-4515-8515-151515151515";
+    record(target, "muse");
+    const fake = join(target, "muse");
+    writeFileSync(fake, "#!/bin/sh\nsleep 30\n");
+    chmodSync(fake, 0o755);
+    const withId = Bun.spawn([fake, "resume", id], { cwd: target, stdout: "ignore", stderr: "ignore" });
+    const bare = Bun.spawn([fake], { cwd: target, stdout: "ignore", stderr: "ignore" });
+    let migrated = false;
+    const noop = () => {};
+    try {
+      await waitForLive(withId.pid, `${target}\0muse`);
+      await waitFor(() => pidsForKey(target, "muse").length === 2);
+      const app = mount(
+        <Hub
+          onMigrate={() => {
+            migrated = true;
+            return { ok: true };
+          }}
+          domains={[]}
+          onOpen={noop}
+          onViewRunning={noop}
+          onNewSession={noop}
+          onDrill={noop}
+          onQuit={noop}
+        />,
+      );
+      try {
+        await waitFrame(app, (f) => f.includes("agora"));
+        await key(app, "T");
+        await waitFrame(app, (f) => f.includes("um processo desse grupo não tem resume id"));
+        await key(app, "T");
+        await sleep(300);
+        expect(migrated).toBe(false);
+        expect(() => process.kill(withId.pid, 0)).not.toThrow();
+        expect(() => process.kill(bare.pid, 0)).not.toThrow();
+      } finally {
+        app.unmount();
+      }
+    } finally {
+      for (const p of [withId, bare]) {
+        try {
+          p.kill();
+        } catch {
+          /* already dead */
+        }
+      }
+      rmSync(fake, { force: true });
+    }
+  }, 30000);
+
+  test("T in the hub refuses rows with nothing to move", async () => {
+    const { rootA } = setupEnv();
+    record(join(rootA, "proj"), "shell");
+    const noop = () => {};
+    let migrated = false;
+    const app = mount(
+      <Hub
+        onMigrate={() => {
+          migrated = true;
+          return { ok: true };
+        }}
+        domains={[{ domain: "@a", repos: 1 }]}
+        onOpen={noop}
+        onViewRunning={noop}
+        onNewSession={noop}
+        onDrill={noop}
+        onQuit={noop}
+      />,
+    );
+    try {
+      await waitFrame(app, (f) => f.includes("Recentes"));
+      await key(app, "T"); // on the Recentes toggle
+      await waitFrame(app, (f) => f.includes("nada para levar ao tmux"));
+      await key(app, KEY.enter); // expand
+      await key(app, KEY.down); // the shell session
+      await key(app, "T");
+      await waitFrame(app, (f) => f.includes("shell não tem conversa"));
+      await key(app, "T");
+      expect(migrated).toBe(false);
+    } finally {
+      app.unmount();
+    }
+  });
+
+  test("long rows truncate so the frame never outgrows the terminal", async () => {
+    const { rootA } = setupEnv();
+    const deep = join(rootA, "a-very-long-project-directory-name", "with", "nested", "folders", "inside");
+    mkdirSync(deep, { recursive: true });
+    record(deep, "claude");
+    const home = join(rootA, "..", "claude-long");
+    mkdirSync(join(home, "projects", "p"), { recursive: true });
+    for (let i = 0; i < 20; i++) {
+      writeFileSync(
+        join(home, "projects", "p", `${String(i).padStart(8, "0")}-0000-4000-8000-000000000000.jsonl`),
+        JSON.stringify({
+          type: "user",
+          // outside /tmp: the Hub hides /tmp conversations by default
+          cwd: "/work/a-very-long-project-directory-name/with/nested/folders/inside",
+          message: { role: "user", content: `pedido longo número ${i} ` + "com bastante texto ".repeat(6) },
+        }) + "\n",
+      );
+    }
+    process.env.ATLAS_CLAUDE_HOME = home;
+    const noop = () => {};
+    const app = mount(
+      <Hub onMigrate={() => ({ ok: true })} domains={[]} onOpen={noop} onViewRunning={noop} onNewSession={noop} onDrill={noop} onQuit={noop} />,
+    );
+    try {
+      await waitFrame(app, (f) => f.includes("Conversas"));
+      await key(app, KEY.enter); // expand recents
+      await key(app, KEY.down, 2); // convos toggle
+      await key(app, KEY.enter); // expand
+      const frame = await waitFrame(app, (f) => f.includes("pedido longo"));
+      const lines = frame.split("\n");
+      expect(lines.length).toBeLessThanOrEqual(24); // DEFAULT_ROWS: the list is sized for it
+      for (const line of lines) expect([...line].length).toBeLessThanOrEqual(100);
+    } finally {
+      app.unmount();
+    }
+  });
+
   test("hub hides /tmp convos unless toggled", async () => {
     setupEnv();
     const fix = join(import.meta.dir, "fixtures");
@@ -378,7 +715,7 @@ describe("tui", () => {
     process.env.ATLAS_MUSE_HOME = join(fix, "muse");
     const noop = () => {};
     const app = mount(
-      <Hub domains={[]} onOpen={noop} onViewRunning={noop} onNewSession={noop} onDrill={noop} onQuit={noop} />,
+      <Hub onMigrate={() => ({ ok: true })} domains={[]} onOpen={noop} onViewRunning={noop} onNewSession={noop} onDrill={noop} onQuit={noop} />,
     );
     try {
       await waitFrame(app, (f) => f.includes("Conversas"));
@@ -745,6 +1082,52 @@ describe("tui", () => {
       rmSync(fake, { force: true });
     }
   }, 30000);
+
+  test("a long live transcript never makes the management view taller than the terminal", async () => {
+    const { rootA } = setupEnv();
+    const target = join(rootA, "proj");
+    const id = "ffffffff-6666-4666-8666-666666666666";
+    const log = join(target, `${id}.jsonl`);
+    writeFileSync(
+      log,
+      Array.from({ length: 40 }, (_, i) =>
+        JSON.stringify({ type: i % 2 ? "assistant" : "user", message: { content: `mensagem ${i + 1} ` + "y".repeat(140) } }),
+      ).join("\n") + "\n",
+    );
+    const fake = join(target, "claude");
+    writeFileSync(fake, "#!/bin/sh\nsleep 30\n");
+    chmodSync(fake, 0o755);
+    const proc = Bun.spawn([fake, "--resume", id], { cwd: target, stdout: "ignore", stderr: "ignore" });
+    const noop = () => {};
+    try {
+      await waitFor(() => runningResumeIds().has(id));
+      const app = mount(
+        <Running
+          target={{ kind: "convo", convo: { harness: "claude", id, dir: target, preview: null, updatedAt: Date.now(), file: log } }}
+          onBack={noop}
+          onQuit={noop}
+          onLaunch={noop}
+          onAttach={noop}
+          onMigrate={() => ({ ok: true })}
+        />,
+      );
+      try {
+        const frame = await waitFrame(app, (f) => f.includes("mensagem 40"));
+        const lines = frame.split("\n");
+        expect(lines.length).toBeLessThanOrEqual(24);
+        for (const line of lines) expect([...line].length).toBeLessThanOrEqual(100);
+      } finally {
+        app.unmount();
+      }
+    } finally {
+      try {
+        proc.kill();
+      } catch {
+        /* already dead */
+      }
+      rmSync(fake, { force: true });
+    }
+  });
 
   test("T T migrates an external convo into tmux", async () => {
     const { rootA } = setupEnv();

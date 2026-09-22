@@ -230,6 +230,11 @@ export async function here(target: string, opts: { dryRun?: boolean } = {}): Pro
   });
 }
 
+/** The TUI draws on the alternate screen (like vim/htop): the mouse wheel
+ *  can no longer scroll the terminal back through stale frames, and the
+ *  shell's screen comes back intact on exit — before any handoff to tmux. */
+export const RENDER_OPTIONS = { alternateScreen: true } as const;
+
 async function pick(start?: Screen): Promise<Choice | null> {
   let choice: Choice | null = null;
   const { waitUntilExit, unmount } = render(
@@ -240,6 +245,7 @@ async function pick(start?: Screen): Promise<Choice | null> {
         unmount();
       }}
     />,
+    RENDER_OPTIONS,
   );
   await waitUntilExit();
   return choice;

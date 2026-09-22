@@ -12,7 +12,8 @@ import {
 } from "../rows";
 import { fit, shorten } from "../util";
 import { theme } from "../theme";
-import { Dim, HeaderRow, HintBar, ItemRow, Title } from "../components/chrome";
+import { Dim, HeaderRow, HintBar, ItemRow, Title, voyageRows } from "../components/chrome";
+import Voyage from "../components/Voyage";
 import { useLiveIndex } from "../components/useLiveIndex";
 
 interface Props {
@@ -54,7 +55,7 @@ export default function DirPicker({ title, candidates, onPick, onBack, onQuit }:
   });
 
   const total = rows.filter((r) => r.t !== "header").length;
-  const listHeight = Math.max(5, (stdout?.rows || 24) - 9);
+  const listHeight = Math.max(5, (stdout?.rows || 24) - 9 - voyageRows(stdout?.rows));
   const [start, end] = windowSlice(rows.length, index, listHeight);
   const inner = Math.max(10, (stdout?.columns || 100) - 8);
 
@@ -107,6 +108,7 @@ export default function DirPicker({ title, candidates, onPick, onBack, onQuit }:
           ["esc", "voltar"],
         ]}
       />
+      <Voyage />
     </Box>
   );
 }

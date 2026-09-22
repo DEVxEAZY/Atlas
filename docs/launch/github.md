@@ -1,20 +1,20 @@
 # GitHub launch setup
 
-These are exact target values, not a statement that settings are already
-applied. Repository: `DEVxEAZY/atlas-cli`.
+These are the exact values applied to the repository (last synced for
+v0.3.0). Repository: `DEVxEAZY/atlas-cli`.
 
 ## Metadata
 
 Description:
 
 ```text
-Every coding-agent session. One terminal hub. Linux TUI for Codex, Claude, Muse, and shell, backed by tmux.
+Every coding-agent session, one terminal hub. Find, preview, resume and re-enter Codex, Claude, Muse and shell sessions — a Linux/WSL TUI backed by tmux.
 ```
 
 Website:
 
 ```text
-https://github.com/DEVxEAZY/atlas-cli#readme
+https://www.npmjs.com/package/@devxeazy/atlas-cli
 ```
 
 Topics (exact set):
@@ -27,12 +27,19 @@ tmux
 session-manager
 developer-tools
 coding-agents
+ai-agents
 codex
+openai-codex
+claude
 claude-code
 bun
 typescript
 ink
 linux
+wsl
+npm-package
+terminal-ui
+productivity
 ```
 
 Keep Issues and Discussions enabled. Enable private vulnerability reporting
