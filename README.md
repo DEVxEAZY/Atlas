@@ -26,6 +26,16 @@ For coding-agent sessions, install and authenticate Codex, Claude, or Muse
 separately and make its command available on `PATH`. You can try Atlas with
 a plain shell first.
 
+With [Bun](https://bun.sh) 1.4.2 or newer on `PATH`, install from npm:
+
+```sh
+bun add -g @devxeazy/atlas-cli    # or: npm install -g @devxeazy/atlas-cli
+atlas --help
+```
+
+The npm package runs on Bun, not Node; `npm install` works only when `bun`
+is on `PATH`. Without Bun, use the standalone binary below.
+
 Download from [v0.1.0 releases](https://github.com/DEVxEAZY/atlas-cli/releases/tag/v0.1.0):
 
 | Linux architecture (`uname -m`) | Archive | Checksum |

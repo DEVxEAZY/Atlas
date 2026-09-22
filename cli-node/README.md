@@ -23,6 +23,11 @@ machine. The [release workflow](../.github/workflows/release.yml) builds
 and attaches SHA-256 checksums. The release version lives in `package.json`.
 CI installs with the frozen lockfile, typechecks, runs the full suite, and builds.
 
+`bun run pack:npm` stages the npm package in `dist/npm`: a single
+Bun-targeted bundle (dependencies inlined), a generated `package.json` for
+`@devxeazy/atlas-cli`, the root README with repository-absolute links, and
+the license. Publish with `npm publish dist/npm` after bumping the version.
+
 Tests expect commands named `codex`, `claude`, and `muse` on `PATH`; CI uses
 no-op shims. Tests use fixtures/fake tmux and do not require agent accounts.
 If those commands are absent locally, use temporary shims for tests only:
