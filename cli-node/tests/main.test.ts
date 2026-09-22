@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { launch, listSessions, parseArgs } from "../src/main.tsx";
 import { buildArgv } from "../src/runtimes";
 import { load } from "../src/history";
-import { launchDetached, tmuxBaseName } from "../src/tmux";
+import { ensureMouse, launchDetached, tmuxBaseName } from "../src/tmux";
 import { fakeCalls, setupFakeTmux } from "./tmux-fake";
 
 /** Run launch() in a child bun (launch execs, so in-process would replace
@@ -106,6 +106,7 @@ describe("main", () => {
         `new-session -d -s ${name} -c ${target} '${process.env.SHELL ?? "/bin/sh"}'`,
       );
       expect(calls).toContain(`attach-session -t ${name}`);
+      expect(calls).toContain(`set-option -t ${name} mouse on`);
       expect(load(db).some((s) => s.dir === target && s.runtime === "shell")).toBe(true);
     } finally {
       fake.restore();
@@ -126,8 +127,9 @@ describe("main", () => {
       const r = launchDetached(target, "shell");
       expect(r).toEqual({ ok: true, name });
       const calls = fakeCalls(fake);
-      expect(calls).toHaveLength(1);
+      expect(calls).toHaveLength(2);
       expect(calls[0]).toContain(`new-session -d -s ${name} -c ${target}`);
+      expect(calls[1]).toBe(`set-option -t ${name} mouse on`);
       expect(load(db)).toEqual([]); // migrate never records history
     } finally {
       fake.restore();
@@ -153,6 +155,24 @@ describe("main", () => {
       else process.env.TMUX_FAKE_CRASH = prevCrash;
       fake.restore();
       rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  test("ensureMouse enables mouse per session and never throws", () => {
+    const fake = setupFakeTmux();
+    try {
+      ensureMouse("legado");
+      expect(fakeCalls(fake)).toEqual(["set-option -t legado mouse on"]);
+      const prevBin = process.env.ATLAS_TMUX_BIN;
+      process.env.ATLAS_TMUX_BIN = "/nonexistent/atlas-no-tmux";
+      try {
+        expect(() => ensureMouse("legado")).not.toThrow();
+      } finally {
+        if (prevBin === undefined) delete process.env.ATLAS_TMUX_BIN;
+        else process.env.ATLAS_TMUX_BIN = prevBin;
+      }
+    } finally {
+      fake.restore();
     }
   });
 
@@ -199,7 +219,10 @@ describe("main", () => {
     const fake = setupFakeTmux([`${name}\t1\t1700000000`]);
     try {
       expect(runLaunch(target, "shell", db, [], { TMUX: undefined }).exitCode).toBe(0);
-      expect(fakeCalls(fake)).toEqual([`attach-session -t ${name}`]);
+      expect(fakeCalls(fake)).toEqual([
+        `set-option -t ${name} mouse on`,
+        `attach-session -t ${name}`,
+      ]);
     } finally {
       fake.restore();
       rmSync(base, { recursive: true, force: true });
@@ -220,6 +243,7 @@ describe("main", () => {
       const name = tmuxBaseName(target, "shell");
       expect(fakeCalls(fake)).toEqual([
         expect.stringContaining(`new-session -d -s ${name} -c ${target}`),
+        `set-option -t ${name} mouse on`,
         `switch-client -t ${name}`,
       ]);
     } finally {
@@ -259,7 +283,10 @@ describe("main", () => {
     try {
       const { exitCode } = runLaunch(target, "shell", db, [name], { TMUX: undefined });
       expect(exitCode).toBe(0);
-      expect(fakeCalls(fake)).toEqual([`attach-session -t ${name}`]);
+      expect(fakeCalls(fake)).toEqual([
+        `set-option -t ${name} mouse on`,
+        `attach-session -t ${name}`,
+      ]);
       expect(existsSync(db)).toBe(false);
     } finally {
       fake.restore();

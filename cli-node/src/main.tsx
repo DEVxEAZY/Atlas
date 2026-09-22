@@ -7,6 +7,7 @@ import App, { type Choice } from "./App";
 import { load, record } from "./history";
 import { buildArgv } from "./runtimes";
 import {
+  ensureMouse,
   execArgv,
   hasSession,
   liveEnv,
@@ -28,6 +29,9 @@ export interface LaunchOpts {
  *  via exec — same PID, group and terminal, so the kernel never sees an
  *  orphaned group to SIGHUP. Only returns when exec itself fails. */
 function handoff(plan: LaunchPlan): number {
+  // every attach heals mouse mode (wheel scroll, app mouse events),
+  // including sessions created before Atlas set it
+  if (plan.name) ensureMouse(plan.name);
   const nested = !!process.env.TMUX;
   if (nested) {
     let code = -1;

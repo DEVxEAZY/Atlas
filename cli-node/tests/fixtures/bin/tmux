@@ -28,6 +28,7 @@ case "$1" in
       if [ -n "$n" ]; then printf '%s\t0\t0\n' "$n" >> "$state/sessions"; fi
     fi
     ;;
+  set-option) echo "$@" >> "$state/calls";;
   attach-session|switch-client) echo "$@" >> "$state/calls";;
   *) echo "fake-tmux: unsupported: $*" >&2; exit 1;;
 esac

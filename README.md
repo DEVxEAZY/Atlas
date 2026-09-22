@@ -130,7 +130,9 @@ Atlas-created tmux sessions use
 `atlas-<dir>-<runtime>-<hash>[-r<resume>][-N]`. Foreign tmux sessions linked
 to a history row or live conversation mark that row `𖥠` instead of appearing
 twice. Unlinked agent sessions and orphaned `atlas-*` sessions appear under
-`◈ sessões tmux`; idle foreign shells are omitted.
+`◈ sessões tmux`; idle foreign shells are omitted. Atlas turns mouse mode on
+for every session it creates or enters, so wheel scroll works; the
+server-wide default stays untouched.
 
 - Linux is the supported platform; macOS and Windows binaries are not provided.
 - Cross-terminal session management requires tmux. Direct launch remains available without it.

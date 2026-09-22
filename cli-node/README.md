@@ -61,7 +61,9 @@ Atlas-created tmux sessions use
 resume-suffixed sessions. A foreign tmux session linked to a history row or
 live conversation marks that row `𖥠` instead of appearing twice. Unlinked
 agent sessions and orphaned `atlas-*` sessions can appear under
-`◈ sessões tmux`. Idle foreign shells are omitted.
+`◈ sessões tmux`. Idle foreign shells are omitted. Atlas turns mouse mode on
+for every session it creates or enters, so wheel scroll works; the
+server-wide default stays untouched.
 
 Outside tmux, attach uses process handoff; inside tmux, Atlas switches the
 current client. Missing tmux falls back to direct runtime launch. Native

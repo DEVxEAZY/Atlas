@@ -195,6 +195,7 @@ export function launchDetached(
   if (createdExit !== 0 && !hasSession(plan.name)) {
     return { ok: false, error: `não consegui criar a sessão tmux '${plan.name}'.` };
   }
+  ensureMouse(plan.name); // wheel scroll works the moment the user enters
   if (graceMs > 0) Bun.sleepSync(graceMs);
   if (!hasSession(plan.name)) {
     return { ok: false, error: "o runtime encerrou logo após iniciar no tmux — nada foi migrado." };
@@ -388,5 +389,18 @@ export function killSession(name: string): boolean {
     return Bun.spawnSync([bin, "kill-session", "-t", name], { env: liveEnv() }).exitCode === 0;
   } catch {
     return false;
+  }
+}
+
+/** Turn mouse mode on for one session (wheel scroll, pane focus, app
+ *  mouse events). Session-scoped: the rest of the server keeps its own
+ *  setting. Best-effort — never fails a launch or attach. */
+export function ensureMouse(name: string): void {
+  const bin = tmuxBin();
+  if (!bin) return;
+  try {
+    Bun.spawnSync([bin, "set-option", "-t", name, "mouse", "on"], { env: liveEnv() });
+  } catch {
+    /* tmux vanished mid-call: attach still proceeds without mouse */
   }
 }
