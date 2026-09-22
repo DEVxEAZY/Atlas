@@ -91,7 +91,7 @@ runtime-specific behavior before changing this path.
 | `ATLAS_ROOTS` | Colon-separated roots; default `~/@development:~/@megavale-repos` |
 | `ATLAS_HISTORY_FILE` | Defaults to `~/.local/share/atlas/history.json` |
 | `ATLAS_TMUX_BIN` | Override the tmux executable (empty = no tmux, direct launch); default lookup on `PATH` |
-| `ATLAS_NO_BOAT` | Set to `1` to hide the footer boat animation |
+| `ATLAS_NO_BOAT` | Set to `1` to hide the footer boat (`ོ𓂃𖠳𓂃`) |
 
 Use disposable repositories and an alternate history file for manual checks.
 History isolation alone does not hide native conversations or other tmux

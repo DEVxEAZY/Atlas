@@ -79,9 +79,9 @@ export const DEFAULT_ROWS = 24;
 export const MIN_LIST_ROWS = 3;
 
 /** Rows the sailing-boat footer (Voyage) draws under the hint bar. */
-export const VOYAGE_ROWS = 2;
+export const VOYAGE_ROWS = 1;
 /** Below this many terminal rows the boat stays docked (not drawn). */
-export const VOYAGE_MIN_ROWS = 18;
+export const VOYAGE_MIN_ROWS = 16;
 
 /** Off when ATLAS_NO_BOAT is set (any non-empty value but "0"). */
 export function voyageEnabled(env: NodeJS.ProcessEnv = process.env): boolean {

@@ -2,6 +2,14 @@
 
 All notable changes to Atlas are documented in this file.
 
+## [Unreleased]
+
+- The footer boat is now a light one-row motif, `ོ𓂃𖠳𓂃` (a gull, a wave, a
+  sailboat, a wave), drifting one column every 250 ms instead of a two-row
+  ASCII scene redrawn every 140 ms: one more row for the list and about
+  half the renders. It still appears only where its row fits, from 16 rows.
+- The social preview and static Hub show the new motif.
+
 ## [0.3.0] - 2026-09-22
 
 - Double `T` in the Hub moves the selected row into tmux in the background:
