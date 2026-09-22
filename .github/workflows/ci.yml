@@ -15,6 +15,8 @@ jobs:
           bun-version: 1.4.2
       - run: bun install --frozen-lockfile
         working-directory: cli-node
+      - run: bun run typecheck
+        working-directory: cli-node
       # the TUI tests assume a box with the agent CLIs installed
       - name: Shim codex/claude/muse on PATH
         run: |

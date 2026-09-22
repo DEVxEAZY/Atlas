@@ -2,18 +2,25 @@
 
 import React from "react";
 import { existsSync, writeSync } from "node:fs";
+import { homedir } from "node:os";
+import { resolve } from "node:path";
 import { render } from "ink";
-import App, { type Choice } from "./App";
-import { load, record } from "./history";
-import { buildArgv } from "./runtimes";
+import App, { type Choice, type Screen } from "./App";
+import { load, record, type Session } from "./history";
+import { runningKeys } from "./process";
+import { RUNTIME_ORDER, buildArgv } from "./runtimes";
 import {
   ensureMouse,
   execArgv,
   hasSession,
+  listAtlasSessions,
   liveEnv,
+  matchAtlasSessionDeep,
   planLaunch,
+  tmuxBaseName,
   tmuxBin,
   type LaunchPlan,
+  type TmuxSession,
 } from "./tmux";
 import { ago, isDir, shorten } from "./util";
 
@@ -62,11 +69,18 @@ function describePlan(plan: LaunchPlan, directory: string): string {
   return `${plan.createArgv!.join(" ")} && ${plan.attachArgv!.join(" ")}`;
 }
 
+/** Absolute form of a user-typed directory: tmux names hash the path, so
+ *  `.` and `~/x` must name the same session as their absolute spelling. */
+export function absDir(directory: string): string {
+  return resolve(directory.replace(/^~(?=\/|$)/, homedir()));
+}
+
 export async function launch(
-  directory: string,
+  target: string,
   runtime: string,
   opts: LaunchOpts = {},
 ): Promise<number> {
+  const directory = absDir(target);
   if (opts.attachTmux) {
     const name = opts.attachTmux;
     const bin = tmuxBin();
@@ -81,6 +95,10 @@ export async function launch(
     const attachArgv = process.env.TMUX
       ? [bin, "switch-client", "-t", name]
       : [bin, "attach-session", "-t", name];
+    if (opts.dryRun) {
+      console.log(attachArgv.join(" "));
+      return 0;
+    }
     return handoff({ mode: "tmux-attach", name, createArgv: null, attachArgv, directArgv: null });
   }
   if (!isDir(directory)) {
@@ -160,10 +178,63 @@ export function listSessions(): number {
   return 0;
 }
 
-async function pick(): Promise<Choice | null> {
+export type Here =
+  | { kind: "attach"; name: string; runtime: string }
+  | { kind: "running"; session: Session }
+  | { kind: "launch"; runtime: string }
+  | { kind: "pick" };
+
+/** What `atlas DIR` re-enters, never duplicating: a live Atlas tmux session
+ *  for the directory (most recently used runtime first, resumed ones
+ *  included), else the management view of an agent already running there
+ *  outside tmux, else the last runtime from history, else the picker. */
+export function planHere(
+  dir: string,
+  live: Map<string, TmuxSession> = listAtlasSessions(),
+  sessions: Session[] = load(),
+  running: Set<string> = runningKeys(),
+): Here {
+  const mine = sessions.filter((s) => s.dir === dir);
+  const used = mine.map((s) => s.runtime);
+  for (const runtime of new Set([...used, ...RUNTIME_ORDER])) {
+    const name = matchAtlasSessionDeep(live, tmuxBaseName(dir, runtime));
+    if (name) return { kind: "attach", name, runtime };
+  }
+  const busy = mine.find((s) => running.has(`${s.dir}\0${s.runtime}`));
+  if (busy) return { kind: "running", session: busy };
+  if (used.length > 0) return { kind: "launch", runtime: used[0] };
+  return { kind: "pick" };
+}
+
+export async function here(target: string, opts: { dryRun?: boolean } = {}): Promise<number> {
+  const dir = absDir(target);
+  if (!isDir(dir)) {
+    console.error(`atlas: diretório não existe: ${target}`);
+    return 2;
+  }
+  const plan = planHere(dir);
+  if (plan.kind === "attach")
+    return launch(dir, plan.runtime, { dryRun: opts.dryRun, attachTmux: plan.name });
+  if (plan.kind === "launch") return launch(dir, plan.runtime, { dryRun: opts.dryRun });
+  const choice = await pick(
+    plan.kind === "running"
+      ? { name: "running", target: { kind: "session", session: plan.session } }
+      : { name: "runtime", dir, fresh: false },
+  );
+  if (!choice) return 0;
+  return launch(choice.dir, choice.runtime, {
+    dryRun: opts.dryRun,
+    resume: choice.resume,
+    fresh: choice.fresh,
+    attachTmux: choice.attachTmux,
+  });
+}
+
+async function pick(start?: Screen): Promise<Choice | null> {
   let choice: Choice | null = null;
   const { waitUntilExit, unmount } = render(
     <App
+      start={start}
       onDone={(c) => {
         choice = c;
         unmount();
@@ -190,12 +261,18 @@ export function parseArgs(argv: string[]): Args {
     else if ((a === "-d" || a === "--dir") && i + 1 < argv.length) out.dir = argv[++i];
     else if ((a === "-r" || a === "--runtime") && i + 1 < argv.length) out.runtime = argv[++i];
     else if (a === "-h" || a === "--help") {
-      console.log("Uso: atlas [--dir DIR --runtime R] [--list] [--print]");
+      console.log("Uso: atlas [DIR] [--dir DIR --runtime R] [--list] [--print]");
       console.log("Sem flags abre a TUI. Runtimes: codex, claude, muse, shell.");
+      console.log("atlas DIR (ex.: atlas .) volta à sessão do diretório: entra na sessão tmux viva,");
+      console.log("senão mostra o agente que já roda ali, senão abre o último runtime usado,");
+      console.log("senão pergunta o runtime.");
       console.log("Sessões com agente rodando mostram um indicador animado e ficam no topo.");
       process.exit(0);
-    } else {
-      console.error(`atlas: flag desconhecida: ${a}`);
+    } else if (!a.startsWith("-") && out.dir === undefined) out.dir = a;
+    else {
+      console.error(
+        a.startsWith("-") ? `atlas: flag desconhecida: ${a}` : `atlas: um diretório por vez: ${a}`,
+      );
       process.exit(2);
     }
   }
@@ -207,8 +284,9 @@ async function main(): Promise<number> {
   if (args.list) return listSessions();
   if (args.dir && args.runtime)
     return launch(args.dir, args.runtime, { dryRun: args.dryRun });
-  if (args.dir || args.runtime) {
-    console.error("atlas: use --dir e --runtime juntos, ou nenhum (abre a TUI).");
+  if (args.dir) return here(args.dir, { dryRun: args.dryRun });
+  if (args.runtime) {
+    console.error("atlas: --runtime precisa de um diretório (atlas DIR --runtime R).");
     return 2;
   }
   const choice = await pick();

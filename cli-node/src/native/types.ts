@@ -40,13 +40,25 @@ export function oneLine(text: string, max = 90): string {
   return clean.length > max ? clean.slice(0, max - 1) + "…" : clean;
 }
 
+/** Text left after leading harness-injected `<tag>…</tag>` blocks (command
+ *  echoes, caveats, IDE context); null when nothing typed remains. */
+export function typedText(text: string): string | null {
+  let rest = text.trim();
+  for (;;) {
+    const m = /^<([A-Za-z][\w-]*)[^>]*>[\s\S]*?<\/\1>\s*/.exec(rest);
+    if (!m) break;
+    rest = rest.slice(m[0].length);
+  }
+  return rest && !rest.startsWith("<") ? rest : null;
+}
+
 /** Read at most maxBytes from the start of a file (never loads multi-MB logs fully). */
 export function readHead(file: string, maxBytes: number): string | null {
   const { closeSync, openSync, readSync } = require("node:fs") as typeof import("node:fs");
   let fd: number | undefined;
   try {
     fd = openSync(file, "r");
-    const buf = Buffer.alloc(Math.min(maxBytes, 262144));
+    const buf = Buffer.alloc(Math.min(maxBytes, 1048576));
     const n = readSync(fd, buf, 0, buf.length, 0);
     return buf.subarray(0, n).toString("utf-8");
   } catch {

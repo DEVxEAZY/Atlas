@@ -6,6 +6,7 @@ import TextInput from "ink-text-input";
 import { load, rekeyRuntime, remove, type Session } from "../history";
 import {
   HARNESS_ORDER,
+  NATIVE_SHOW_LIMIT,
   loadNativeSessions,
   loadNativeTotals,
   scanHarness,
@@ -419,6 +420,11 @@ export default function Hub({
     else setMsg(`não consegui encerrar o PID ${result.alive.join(", ")} — sem permissão?`);
   };
 
+  // /tmp convos stay hidden unless asked for — except live ones, which
+  // must stay visible like every other live session
+  const convoVisible = (c: NativeSession): boolean =>
+    showTmp || !isTmpDir(c.dir) || isConvoLive(c);
+
   const filtering = query.trim().length > 0;
   const showRecents = expandedRecents || filtering;
   const showConvos = expandedConvos || filtering;
@@ -532,10 +538,8 @@ export default function Hub({
     }
     out.push({ t: "toggleConvos" });
     if (showConvos) {
-      // /tmp convos stay hidden unless asked for — except live ones, which
-      // must stay visible like every other live session
       const matching = effectiveConvos.filter(
-        (c) => matchConvo(c, query) && (showTmp || !isTmpDir(c.dir) || isConvoLive(c)),
+        (c) => matchConvo(c, query) && convoVisible(c),
       );
       if (matching.length === 0) {
         out.push({
@@ -558,7 +562,7 @@ export default function Hub({
               .length;
         const total = totals[h] - hidden;
         const open = filtering || expandedHarness[h];
-        const shown = open ? items : items.slice(0, 12);
+        const shown = open ? items : items.slice(0, NATIVE_SHOW_LIMIT);
         const count = total > shown.length ? `${shown.length} de ${total}` : `${total}`;
         out.push({
           t: "header",
@@ -572,7 +576,7 @@ export default function Hub({
             mode: loadingHarness[h] ? "loading" : "more",
             total,
           });
-        } else if (!filtering && expandedHarness[h] && total > 12) {
+        } else if (!filtering && expandedHarness[h] && total > NATIVE_SHOW_LIMIT) {
           out.push({ t: "expandConvo", harness: h, mode: "less", total });
         }
       }
@@ -620,7 +624,8 @@ export default function Hub({
     const total = totals.claude + totals.codex + totals.muse;
     if (!showConvos) return total === 0 ? "▸ Conversas · nenhuma" : `▸ Conversas · ${total}`;
     if (filtering) {
-      const n = convos.filter((c) => matchConvo(c, query)).length;
+      // same universe the section lists: loaded history, /tmp visibility
+      const n = effectiveConvos.filter((c) => matchConvo(c, query) && convoVisible(c)).length;
       return `▾ Conversas · ${n} ${n === 1 ? "resultado" : "resultados"}`;
     }
     return `▾ Conversas · ${total}`;

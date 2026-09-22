@@ -48,29 +48,69 @@ function loadPreviewIndex(home: string): Map<string, string> {
   return map;
 }
 
-export function parseCodexMeta(
-  file: string,
-): { id: string; sessionId: string | null; cwd: string | null } | null {
-  const head = readHead(file, 65536);
-  if (head === null) return null;
-  const first = head.split("\n", 1)[0] ?? "";
-  if (!first.startsWith("{")) return null;
+/** Bytes read for the session_meta line. The line embeds the full base
+ *  instructions (tens of KB and growing), so it can outgrow this window. */
+export const CODEX_META_BYTES = 65536;
+
+/** First top-level-looking `"key":"value"` string field. A bare `"key":"`
+ *  cannot occur inside a JSON string (inner quotes are escaped), so a match
+ *  is a real field even when the rest of the line is cut off. */
+function prefixField(text: string, key: string): string | null {
+  const m = new RegExp(`"${key}":("(?:[^"\\\\]|\\\\.)*")`).exec(text);
+  if (!m) return null;
   try {
-    const obj = JSON.parse(first) as {
-      type?: unknown;
-      payload?: { id?: unknown; session_id?: unknown; cwd?: unknown };
-    };
-    if (obj.type !== "session_meta" || !obj.payload) return null;
-    const { id, session_id, cwd } = obj.payload;
-    if (typeof id !== "string") return null;
-    return {
-      id,
-      sessionId: typeof session_id === "string" ? session_id : null,
-      cwd: typeof cwd === "string" ? cwd : null,
-    };
+    const v: unknown = JSON.parse(m[1]);
+    return typeof v === "string" ? v : null;
   } catch {
     return null;
   }
+}
+
+function cutByWindow(file: string, maxBytes: number): boolean {
+  try {
+    return statSync(file).size > maxBytes;
+  } catch {
+    return false;
+  }
+}
+
+export function parseCodexMeta(
+  file: string,
+  maxBytes: number = CODEX_META_BYTES,
+): { id: string; sessionId: string | null; cwd: string | null } | null {
+  const head = readHead(file, maxBytes);
+  if (head === null) return null;
+  const newline = head.indexOf("\n");
+  const first = newline === -1 ? head : head.slice(0, newline);
+  if (!first.startsWith("{")) return null;
+  let obj: { type?: unknown; payload?: { id?: unknown; session_id?: unknown; cwd?: unknown } };
+  try {
+    obj = JSON.parse(first);
+  } catch {
+    // cut by the read window (not a torn write): the identifying fields
+    // precede base_instructions, so recover them from the prefix
+    if (newline !== -1 || !cutByWindow(file, maxBytes)) return null;
+    if (!first.includes('"type":"session_meta"')) return null;
+    const payloadAt = first.indexOf('"payload":{');
+    if (payloadAt === -1) return null;
+    const payload = first.slice(payloadAt);
+    obj = {
+      type: "session_meta",
+      payload: {
+        id: prefixField(payload, "id") ?? undefined,
+        session_id: prefixField(payload, "session_id") ?? undefined,
+        cwd: prefixField(payload, "cwd") ?? undefined,
+      },
+    };
+  }
+  if (obj.type !== "session_meta" || !obj.payload) return null;
+  const { id, session_id, cwd } = obj.payload;
+  if (typeof id !== "string") return null;
+  return {
+    id,
+    sessionId: typeof session_id === "string" ? session_id : null,
+    cwd: typeof cwd === "string" ? cwd : null,
+  };
 }
 
 export function scanCodex(

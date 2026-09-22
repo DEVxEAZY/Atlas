@@ -1,7 +1,9 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { scanClaude } from "../src/native/claude";
-import { scanCodex } from "../src/native/codex";
+import { CODEX_META_BYTES, parseCodexMeta, scanCodex } from "../src/native/codex";
 import { scanMuse } from "../src/native/muse";
 import { loadNativeSessions } from "../src/native/index";
 import { TRANSCRIPT_PEEK, peekTranscript, readTail } from "../src/native/peek";
@@ -197,5 +199,157 @@ describe("native", () => {
       if (prevM === undefined) delete process.env.ATLAS_MUSE_HOME;
       else process.env.ATLAS_MUSE_HOME = prevM;
     }
+  });
+});
+
+/** Synthetic Codex stores: a valid rollout next to partially written or
+ *  malformed ones must keep the valid rollout listed and never throw. */
+
+const codexBase = mkdtempSync(join(tmpdir(), "atlas-codex-partial-"));
+afterAll(() => rmSync(codexBase, { recursive: true, force: true }));
+
+function meta(id: string, cwd: string, instructions = "be helpful"): string {
+  return JSON.stringify({
+    timestamp: "2026-09-22T10:00:00.000Z",
+    type: "session_meta",
+    payload: { session_id: id, id, timestamp: "2026-09-22T10:00:00.000Z", cwd, base_instructions: instructions },
+  });
+}
+
+function user(text: string): string {
+  return JSON.stringify({ type: "response_item", payload: { role: "user", content: [{ type: "input_text", text }] } });
+}
+
+function store(name: string, files: Record<string, string>): string {
+  const home = join(codexBase, name);
+  const day = join(home, "sessions", "2026", "09", "22");
+  mkdirSync(day, { recursive: true });
+  let t = 1_790_000_000;
+  for (const [file, body] of Object.entries(files)) {
+    const path = join(day, file);
+    writeFileSync(path, body);
+    utimesSync(path, t, t); // deterministic newest-first order
+    t += 60;
+  }
+  return home;
+}
+
+const VALID = "01a0cccc-0000-0000-0000-000000000001";
+
+describe("codex partial records", () => {
+  test("a malformed index line does not hide a valid index preview", () => {
+    const home = store("index", {
+      "rollout-quiet.jsonl": `${meta(VALID, "/work/quiet")}\n`, // no user message yet
+    });
+    writeFileSync(
+      join(home, "history.jsonl"),
+      `{"session_id":"${VALID}","ts":1,"text":"cortada\n` +
+        `not json\n` +
+        `${JSON.stringify({ session_id: VALID, ts: 2, text: "preview do índice" })}\n`,
+    );
+    const { items } = scanCodex(home);
+    expect(items.map((i) => [i.id, i.preview])).toEqual([[VALID, "preview do índice"]]);
+  });
+
+  test("torn and malformed rollouts are skipped beside a valid one", () => {
+    const full = meta("01a0cccc-0000-0000-0000-000000000002", "/work/torn");
+    const home = store("mixed", {
+      "rollout-valid.jsonl": `${meta(VALID, "/work/ok")}\n${user("revisar o parser")}\n`,
+      "rollout-torn.jsonl": full.slice(0, Math.floor(full.length / 2)),
+      "rollout-garbage.jsonl": "not json at all\n",
+      "rollout-empty.jsonl": "",
+      "rollout-other-type.jsonl": `${JSON.stringify({ type: "event_msg", payload: { id: "x" } })}\n`,
+    });
+    const { items, total } = scanCodex(home);
+    expect(total).toBe(5); // every rollout file counts, parsed or not
+    expect(items.map((i) => i.id)).toEqual([VALID]);
+    expect(items[0].dir).toBe("/work/ok");
+    expect(items[0].preview).toBe("revisar o parser");
+  });
+
+  test("a half-written trailing record keeps the session and its preview", () => {
+    const tail = user("linha interrompida no meio");
+    const home = store("trailing", {
+      "rollout-live.jsonl": `${meta(VALID, "/work/live")}\n${user("primeira mensagem")}\n${tail.slice(0, 20)}`,
+    });
+    const { items } = scanCodex(home);
+    expect(items).toHaveLength(1);
+    expect(items[0].dir).toBe("/work/live");
+    expect(items[0].preview).toBe("primeira mensagem");
+  });
+
+  test("a session_meta line larger than the read window is still identified", () => {
+    const huge = `quote " and \\ backslash, fake "cwd":"/nope" ` + "x".repeat(CODEX_META_BYTES * 2);
+    const home = store("oversized", {
+      "rollout-big.jsonl": `${meta(VALID, "/work/big dir", huge)}\n${user("oi")}\n`,
+    });
+    const file = join(home, "sessions", "2026", "09", "22", "rollout-big.jsonl");
+    expect(parseCodexMeta(file)).toEqual({ id: VALID, sessionId: VALID, cwd: "/work/big dir" });
+    const { items } = scanCodex(home);
+    expect(items.map((i) => [i.id, i.dir])).toEqual([[VALID, "/work/big dir"]]);
+  });
+
+  test("a torn line shorter than the window is not guessed at", () => {
+    const full = meta(VALID, "/work/torn");
+    const home = store("short-torn", { "rollout.jsonl": full.slice(0, full.indexOf("base_instructions")) });
+    expect(parseCodexMeta(join(home, "sessions", "2026", "09", "22", "rollout.jsonl"))).toBeNull();
+  });
+});
+
+describe("claude injected turns", () => {
+  const home = mkdtempSync(join(tmpdir(), "atlas-claude-meta-"));
+  afterAll(() => rmSync(home, { recursive: true, force: true }));
+  const id = "33333333-3333-3333-3333-333333333333";
+  const file = join(home, "projects", "-work-app", `${id}.jsonl`);
+  const turn = (message: unknown, extra: Record<string, unknown> = {}) =>
+    JSON.stringify({ type: "user", cwd: "/work/app", message, ...extra });
+  mkdirSync(join(home, "projects", "-work-app"), { recursive: true });
+  writeFileSync(
+    file,
+    [
+      turn({ role: "user", content: "<local-command-caveat>Caveat: generated by commands</local-command-caveat>" }, { isMeta: true }),
+      turn({ role: "user", content: "<command-name>/effort</command-name>\n<command-message>effort</command-message>" }),
+      turn({ role: "user", content: "<local-command-stdout>Set effort</local-command-stdout>" }),
+      turn({ role: "user", content: "# Skill body loaded by the harness" }, { isMeta: true }),
+      turn({ role: "user", content: [{ type: "text", text: "<ide_selection>x</ide_selection>\nconsertar o cron" }] }),
+      JSON.stringify({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: "feito" }] } }),
+    ].join("\n") + "\n",
+  );
+
+  test("preview skips caveats, command echoes and meta turns", () => {
+    const { items } = scanClaude(home);
+    expect(items.map((i) => [i.id, i.dir, i.preview])).toEqual([[id, "/work/app", "consertar o cron"]]);
+  });
+
+  test("peek shows typed turns only", () => {
+    expect(peekTranscript("claude", file)).toEqual([
+      { role: "você", text: "consertar o cron" },
+      { role: "agente", text: "feito" },
+    ]);
+  });
+
+  test("cwd and prompt past the first 64 KB are still found", () => {
+    const big = join(home, "projects", "-work-app", "44444444-4444-4444-4444-444444444444.jsonl");
+    writeFileSync(
+      big,
+      [
+        JSON.stringify({ type: "attachment", content: "x".repeat(200_000) }),
+        turn({ role: "user", content: "prompt depois do anexo" }),
+      ].join("\n") + "\n",
+    );
+    try {
+      const found = scanClaude(home).items.find((i) => i.id.startsWith("4444"))!;
+      expect([found.dir, found.preview]).toEqual(["/work/app", "prompt depois do anexo"]);
+    } finally {
+      rmSync(big);
+    }
+  });
+
+  test("typedText strips leading tag blocks and keeps plain text", async () => {
+    const { typedText } = await import("../src/native/types");
+    expect(typedText("<a>1</a> <b-c k=v>2</b-c>\n oi")).toBe("oi");
+    expect(typedText("<a>only</a>")).toBeNull();
+    expect(typedText("<unclosed> texto")).toBeNull();
+    expect(typedText("use <b>isso</b>")).toBe("use <b>isso</b>");
   });
 });

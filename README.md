@@ -66,7 +66,8 @@ another terminal, select the running session, press `Enter` to preview it,
 then `Enter` again to attach.
 
 The interface is **Brazilian Portuguese (pt-BR)**: `agora` means running now,
-`Recentes` means recent sessions, and `Conversas` means conversations.
+`Recentes` means recent sessions, and `Conversas` means conversations. The
+[UI glossary](docs/ui-glossary.md) covers every key label.
 
 To discover projects automatically, set your own scan roots:
 
@@ -99,13 +100,19 @@ detached tmux session. It works from conversation and history rows; history
 rows need one unambiguous resume ID. Atlas refuses unsupported or ambiguous
 migrations with guidance.
 
+To go straight back to a project's session, run `atlas` with its directory.
+Atlas attaches to that directory's live tmux session, otherwise shows the
+running agent's management view, otherwise starts the runtime you last used
+there, and only asks for a runtime when there is no history:
+
 ```sh
+cd "$HOME/projects/my-app" && atlas .
 atlas --list
 atlas --dir "$HOME/projects/my-app" --runtime codex
 atlas --dir "$HOME/projects/my-app" --runtime shell --print
 ```
 
-`--print` shows the launch command without starting a session.
+`--print` shows the launch or attach command without running it.
 
 ## Local data and privacy
 

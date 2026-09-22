@@ -182,7 +182,7 @@ export function launchDetached(
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
-  if (plan.mode === "tmux-attach") return { ok: true, name: plan.name };
+  if (plan.mode === "tmux-attach") return { ok: true, name: plan.name ?? undefined };
   if (plan.mode !== "tmux-new" || !plan.createArgv || !plan.name) {
     return { ok: false, error: "não consegui planejar a sessão tmux." };
   }

@@ -92,6 +92,39 @@ describe("tui", () => {
     }
   });
 
+  test("atlas DIR without history starts on the runtime picker", async () => {
+    const { rootA } = setupEnv();
+    const target = join(rootA, "proj");
+    let done: Choice | null | undefined;
+    const app = mount(
+      <App start={{ name: "runtime", dir: target, fresh: false }} onDone={(c) => (done = c)} />,
+    );
+    try {
+      await waitFrame(app, (f) => f.includes("runtime ·") && f.includes("Terminal"));
+      await key(app, KEY.up, 5); // up past the agents lands on the first one
+      await key(app, KEY.down, 3); // Terminal is always available
+      await key(app, KEY.enter);
+      await waitFor(() => done !== undefined);
+      expect(done).toEqual({ dir: target, runtime: "shell", fresh: false });
+    } finally {
+      app.unmount();
+    }
+  });
+
+  test("esc from a start screen falls back to the hub", async () => {
+    const { rootA } = setupEnv();
+    const app = mount(
+      <App start={{ name: "runtime", dir: join(rootA, "proj"), fresh: false }} onDone={() => {}} />,
+    );
+    try {
+      await waitFrame(app, (f) => f.includes("runtime ·"));
+      await key(app, KEY.esc);
+      await waitFrame(app, (f) => f.includes("Recentes"));
+    } finally {
+      app.unmount();
+    }
+  });
+
   test("filter narrows recents", async () => {
     const { rootA, rootB } = setupEnv();
     record(join(rootA, "proj"), "codex");

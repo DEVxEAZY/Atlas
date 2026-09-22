@@ -2,46 +2,71 @@
 
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
-import { NATIVE_PARSE_LIMIT, nativeHome, oneLine, readHead, type NativeSession } from "./types";
+import {
+  NATIVE_PARSE_LIMIT,
+  nativeHome,
+  oneLine,
+  readHead,
+  typedText,
+  type NativeSession,
+} from "./types";
 
 interface Parsed {
   cwd: string | null;
   preview: string | null;
 }
 
+/** Head windows tried in order: attachments and hook output can push the
+ *  first typed prompt past 64 KB, so a miss retries once, wider. */
+export const CLAUDE_HEAD_WINDOWS = [65536, 524288];
+
 export function parseClaudeFile(file: string): Parsed {
-  const head = readHead(file, 65536);
-  if (head === null) {
-    return { cwd: null, preview: null };
-  }
-  for (const line of head.split("\n").slice(0, 80)) {
-    if (!line.startsWith("{")) continue;
-    let obj: Record<string, unknown>;
-    try {
-      obj = JSON.parse(line);
-    } catch {
-      continue;
+  let cwd: string | null = null;
+  for (const window of CLAUDE_HEAD_WINDOWS) {
+    const head = readHead(file, window);
+    if (head === null) return { cwd, preview: null };
+    const whole = Buffer.byteLength(head) < window;
+    const lines = head.split("\n");
+    if (!whole) lines.pop(); // cut mid-record by the window
+    for (const line of lines) {
+      if (!line.startsWith("{")) continue;
+      let obj: Record<string, unknown>;
+      try {
+        obj = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (obj.type !== "user") continue;
+      if (cwd === null && typeof obj.cwd === "string") cwd = obj.cwd;
+      // harness-injected turns (command caveats, slash-command echoes, skill
+      // bodies) are not what the user asked: keep looking for a real prompt
+      if (obj.isMeta === true) continue;
+      const preview = extractText(obj.message);
+      if (preview !== null) return { cwd, preview };
     }
-    if (obj.type !== "user") continue;
-    const cwd = typeof obj.cwd === "string" ? obj.cwd : null;
-    const preview = extractText(obj.message);
-    if (cwd !== null || preview !== null) return { cwd, preview };
+    if (whole) break; // the whole file was read
   }
-  return { cwd: null, preview: null };
+  return { cwd, preview: null };
 }
 
+/** First user-typed text part; `<tag>` blocks are injected, not typed. */
 function extractText(message: unknown): string | null {
-  if (typeof message === "string") return oneLine(message);
-  if (typeof message === "object" && message !== null) {
+  const texts: string[] = [];
+  if (typeof message === "string") texts.push(message);
+  else if (typeof message === "object" && message !== null) {
     const content = (message as Record<string, unknown>).content;
-    if (typeof content === "string") return oneLine(content);
-    if (Array.isArray(content)) {
-      const part = content.find(
-        (p): p is { type: string; text: string } =>
-          typeof p === "object" && p !== null && (p as Record<string, unknown>).type === "text",
-      );
-      if (part && typeof part.text === "string") return oneLine(part.text);
+    if (typeof content === "string") texts.push(content);
+    else if (Array.isArray(content)) {
+      for (const p of content) {
+        if (typeof p !== "object" || p === null) continue;
+        const rec = p as Record<string, unknown>;
+        if (rec.type === "text" && typeof rec.text === "string") texts.push(rec.text);
+      }
     }
+  }
+  for (const text of texts) {
+    const typed = typedText(text);
+    if (typed) return oneLine(typed);
   }
   return null;
 }
@@ -62,7 +87,7 @@ export function scanClaude(
   try {
     slugs = readdirSync(projects);
   } catch {
-    return [];
+    return { items: [], total: 0 };
   }
   for (const slug of slugs) {
     const dir = join(projects, slug);
