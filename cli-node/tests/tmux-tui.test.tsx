@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import App, { type Choice } from "../src/App";
+import Running from "../src/screens/Running";
 import { load, record } from "../src/history";
 import { TMUX_MARK } from "../src/theme";
 import { tmuxBaseName } from "../src/tmux";
@@ -256,6 +257,39 @@ describe("tmux-managed sessions", () => {
       await key(app, KEY.enter); // snap sits on the agora row: manage view
       const view = await waitFrame(app, (f) => f.includes(`Sessão em execução · ${name}`));
       expect(view).toContain("entrar");
+    } finally {
+      app.unmount();
+    }
+  });
+
+  test("a long tmux pane never makes the management view taller than the terminal", async () => {
+    const { rootA } = setupEnv();
+    const target = join(rootA, "proj");
+    const id = "eeeeeeee-5555-4555-8555-555555555555";
+    const name = tmuxBaseName(target, "claude", id);
+    const pane = Array.from({ length: 80 }, (_, i) => `linha ${i + 1} ` + "x".repeat(150));
+    const fake = setupFakeTmux([`${name}\t0\t1700000000`], pane);
+    fakes.push(fake);
+    const noop = () => {};
+    const app = mount(
+      <Running
+        target={{
+          kind: "convo",
+          tmux: name,
+          convo: { harness: "claude", id, dir: target, preview: null, updatedAt: Date.now(), file: join(target, "x.jsonl") },
+        }}
+        onBack={noop}
+        onQuit={noop}
+        onLaunch={noop}
+        onAttach={noop}
+        onMigrate={() => ({ ok: true })}
+      />,
+    );
+    try {
+      const frame = await waitFrame(app, (f) => f.includes("linha 80"));
+      const lines = frame.split("\n");
+      expect(lines.length).toBeLessThanOrEqual(24); // DEFAULT_ROWS in the test renderer
+      for (const line of lines) expect([...line].length).toBeLessThanOrEqual(100);
     } finally {
       app.unmount();
     }

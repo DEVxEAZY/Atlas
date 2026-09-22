@@ -82,7 +82,7 @@ describe("stress", () => {
     let done: Choice | null | undefined;
     const noop = () => {};
     const app = mount(
-      <Hub domains={[{ domain: "@a", repos: 1 }]} onOpen={(c) => (done = c)} onViewRunning={noop} onNewSession={noop} onDrill={noop} onQuit={() => (done = null)} />,
+      <Hub onMigrate={() => ({ ok: true })} domains={[{ domain: "@a", repos: 1 }]} onOpen={(c) => (done = c)} onViewRunning={noop} onNewSession={noop} onDrill={noop} onQuit={() => (done = null)} />,
     );
     try {
       await waitFrame(app, (f) => f.includes("Recentes"));
@@ -152,7 +152,7 @@ describe("stress", () => {
     let done: Choice | null | undefined;
     const noop = () => {};
     const app = mount(
-      <Hub domains={[{ domain: "@a", repos: 2000 }]} onOpen={(c) => (done = c)} onViewRunning={noop} onNewSession={noop} onDrill={noop} onQuit={() => (done = null)} />,
+      <Hub onMigrate={() => ({ ok: true })} domains={[{ domain: "@a", repos: 2000 }]} onOpen={(c) => (done = c)} onViewRunning={noop} onNewSession={noop} onDrill={noop} onQuit={() => (done = null)} />,
     );
     try {
       await waitFrame(app, (f) => f.includes("Recentes"));
@@ -172,7 +172,7 @@ describe("stress", () => {
     record(join(rootA, "proj"), "codex");
     const noop = () => {};
     const tree = (
-      <Hub domains={[{ domain: "@a", repos: 1 }]} onOpen={noop} onViewRunning={noop} onNewSession={noop} onDrill={noop} onQuit={noop} />
+      <Hub onMigrate={() => ({ ok: true })} domains={[{ domain: "@a", repos: 1 }]} onOpen={noop} onViewRunning={noop} onNewSession={noop} onDrill={noop} onQuit={noop} />
     );
     const app = mount(tree);
     try {

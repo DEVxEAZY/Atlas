@@ -1,5 +1,11 @@
 # Atlas CLI
 
+[![npm](https://img.shields.io/npm/v/@devxeazy/atlas-cli?color=ff8f6b&label=npm)](https://www.npmjs.com/package/@devxeazy/atlas-cli)
+[![CI](https://github.com/DEVxEAZY/atlas-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/DEVxEAZY/atlas-cli/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/DEVxEAZY/atlas-cli?color=ffb386)](https://github.com/DEVxEAZY/atlas-cli/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-f472a0)](LICENSE)
+![Linux · WSL](https://img.shields.io/badge/platform-Linux%20%C2%B7%20WSL-f2c14e)
+
 ## Every coding-agent session. One terminal hub.
 
 Find, preview, and re-enter your Codex, Claude, Muse, and shell sessions on the
@@ -36,12 +42,17 @@ atlas --help
 The npm package runs on Bun, not Node; `npm install` works only when `bun`
 is on `PATH`. Without Bun, use the standalone binary below.
 
-Download from [v0.1.0 releases](https://github.com/DEVxEAZY/atlas-cli/releases/tag/v0.1.0):
+**WSL:** install inside the Linux distribution, not from Windows. If
+`npm install` fails with `EBADPLATFORM … current: {"os":"win32"}`, WSL
+resolved the Windows `npm` (`which npm` shows `/mnt/c/…`). Install Bun and
+tmux inside WSL, then `bun add -g @devxeazy/atlas-cli`.
+
+Or download a standalone binary (Bun included) from the [latest release](https://github.com/DEVxEAZY/atlas-cli/releases/latest):
 
 | Linux architecture (`uname -m`) | Archive | Checksum |
 | --- | --- | --- |
-| `x86_64` | [atlas-linux-x64.tar.gz](https://github.com/DEVxEAZY/atlas-cli/releases/download/v0.1.0/atlas-linux-x64.tar.gz) | [SHA-256](https://github.com/DEVxEAZY/atlas-cli/releases/download/v0.1.0/atlas-linux-x64.tar.gz.sha256) |
-| `aarch64` / `arm64` | [atlas-linux-arm64.tar.gz](https://github.com/DEVxEAZY/atlas-cli/releases/download/v0.1.0/atlas-linux-arm64.tar.gz) | [SHA-256](https://github.com/DEVxEAZY/atlas-cli/releases/download/v0.1.0/atlas-linux-arm64.tar.gz.sha256) |
+| `x86_64` | [atlas-linux-x64.tar.gz](https://github.com/DEVxEAZY/atlas-cli/releases/latest/download/atlas-linux-x64.tar.gz) | [SHA-256](https://github.com/DEVxEAZY/atlas-cli/releases/latest/download/atlas-linux-x64.tar.gz.sha256) |
+| `aarch64` / `arm64` | [atlas-linux-arm64.tar.gz](https://github.com/DEVxEAZY/atlas-cli/releases/latest/download/atlas-linux-arm64.tar.gz) | [SHA-256](https://github.com/DEVxEAZY/atlas-cli/releases/latest/download/atlas-linux-arm64.tar.gz.sha256) |
 
 For x86_64, run the following. On arm64, replace `atlas-linux-x64` with
 `atlas-linux-arm64` on the first line. Downloads stay in a temporary directory.
@@ -51,8 +62,8 @@ atlas_asset=atlas-linux-x64
 (
   atlas_download_dir=$(mktemp -d) &&
   cd "$atlas_download_dir" &&
-  curl -fLO "https://github.com/DEVxEAZY/atlas-cli/releases/download/v0.1.0/$atlas_asset.tar.gz" &&
-  curl -fLO "https://github.com/DEVxEAZY/atlas-cli/releases/download/v0.1.0/$atlas_asset.tar.gz.sha256" &&
+  curl -fLO "https://github.com/DEVxEAZY/atlas-cli/releases/latest/download/$atlas_asset.tar.gz" &&
+  curl -fLO "https://github.com/DEVxEAZY/atlas-cli/releases/latest/download/$atlas_asset.tar.gz.sha256" &&
   sha256sum --check "$atlas_asset.tar.gz.sha256" &&
   tar -xzf "$atlas_asset.tar.gz" &&
   mkdir -p "$HOME/.local/bin" &&
@@ -61,7 +72,7 @@ atlas_asset=atlas-linux-x64
 ```
 
 If needed, add that `PATH` export to your shell startup file.
-[Release notes](docs/releases/v0.1.0.md) include platform details.
+[Release notes](https://github.com/DEVxEAZY/atlas-cli/releases) include platform details.
 
 ## First run
 
@@ -98,7 +109,7 @@ roots. The default roots are `~/@development` and `~/@megavale-repos`.
 | Preview a running tmux session / attach | `Enter` / `Enter` again |
 | Leave a preview / quit Atlas | `Esc` / `Ctrl-c` |
 | End the selected running session | `X`, then `X` again to confirm |
-| Migrate an external agent session into tmux | `T`, then `T` again (requires a resume ID) |
+| Move a session or conversation into tmux, from the Hub or its management view | `T`, then `T` again |
 | Detach inside tmux without ending the session | `Ctrl-b`, then `d` (default tmux prefix) |
 
 For a deliberate second session in the same directory, use `n`. Opening a
@@ -106,7 +117,8 @@ running row shows its management view. Ending a session stops its work;
 detaching leaves it running.
 
 Migration stops the external process and resumes its conversation in a
-detached tmux session. It works from conversation and history rows; history
+detached tmux session; an idle conversation simply opens there in the
+background. It works from conversation and history rows; history
 rows need one unambiguous resume ID. Atlas refuses unsupported or ambiguous
 migrations with guidance.
 
@@ -141,7 +153,9 @@ The maintained implementation is [Bun + TypeScript + Ink](cli-node/README.md).
 Atlas discovers real directories, reads local history and native conversation
 stores, and launches installed runtimes. tmux owns persistent sessions;
 Atlas captures pane output for previews and hands the terminal to tmux when
-you attach. `ATLAS_TMUX_BIN` can override tmux discovery on `PATH`.
+you attach. `ATLAS_TMUX_BIN` can override tmux discovery on `PATH` (set it
+empty to force direct launch); `ATLAS_NO_BOAT=1` hides the sailing-boat
+animation in the footer.
 
 Atlas-created tmux sessions use
 `atlas-<dir>-<runtime>-<hash>[-r<resume>][-N]`. Foreign tmux sessions linked

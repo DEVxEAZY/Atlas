@@ -1,16 +1,27 @@
 import { homedir } from "node:os";
-import React, { useState } from "react";
-import { Box, Text, useInput, useStdout } from "ink";
+import React, { useEffect, useRef, useState } from "react";
+import { Box, Text, useInput } from "ink";
 import type { Choice } from "../App";
 import type { Session } from "../history";
 import type { NativeSession } from "../native/index";
 import { TRANSCRIPT_PEEK, peekTranscript, type PeekLine } from "../native/peek";
-import { pidsForKey, pidsForResume, procStartedAt, resumeIdsForPids, terminatePids } from "../process";
+import {
+  convoMigration,
+  migrationInFlight,
+  runMigration,
+  sessionMigration,
+  type MigrateResult,
+  type Migration,
+} from "../migrate";
+import { pidsForKey, pidsForResume, procStartedAt, terminatePids } from "../process";
 import { convoDisplay, sessionDisplay } from "../rows";
 import { RUNTIME_COLOR, RUNTIME_ICON, TMUX_MARK, theme } from "../theme";
-import { capturePane, hasSession, killSession } from "../tmux";
+import { capturePane, hasSession, killSession, tmuxUsable } from "../tmux";
 import { ago, shorten } from "../util";
-import { Dim, HintBar, StatusLine, Title } from "../components/chrome";
+import { Dim, HintBar, MIN_LIST_ROWS, StatusLine, Title, VOYAGE_ROWS, boatFits } from "../components/chrome";
+import { useLive } from "../components/useLiveIndex";
+import { useTermSize } from "../components/useTermSize";
+import Voyage from "../components/Voyage";
 
 export type RunningTarget =
   | { kind: "session"; session: Session; tmux?: string }
@@ -23,7 +34,7 @@ interface Props {
   onLaunch: (c: Choice) => void;
   onAttach: (c: Choice) => void;
   /** Background migrate into tmux (never attaches); App pops to Hub on ok. */
-  onMigrate: (c: Choice) => { ok: boolean; error?: string };
+  onMigrate: (c: Choice) => MigrateResult;
 }
 
 interface ProcInfo {
@@ -42,26 +53,34 @@ function resolveProcs(t: RunningTarget): ProcInfo[] {
   });
 }
 
-type SessionMigrate = { pids: number[]; id: string } | { refuse: string };
+/** Rows the management view draws around its list, per variant (keep in
+ *  sync with the JSX below): an Ink frame taller than the terminal is fully
+ *  cleared and redrawn on every render — each boat tick included. */
+export interface RunningVariant {
+  convo: boolean;
+  ended: boolean;
+  tmux: boolean;
+  procs: number;
+}
 
-/** What a history session migrates with: its live pids plus the single
- *  resume id they hold. Anything else refuses with guidance instead of
- *  guessing (a wrong resume would orphan the real conversation). */
-function resolveSessionMigrate(dir: string, runtime: string): SessionMigrate {
-  if (runtime === "shell") {
-    return { refuse: "shell não tem conversa para retomar — abra uma nova sessão no tmux com n no Hub." };
-  }
-  const pids = pidsForKey(dir, runtime);
-  if (pids.length === 0) return { refuse: "o processo já encerrou — esc volta ao Hub." };
-  const ids = resumeIdsForPids(pids);
-  if (ids.length === 0) {
-    return {
-      refuse:
-        "esse processo não tem resume id — encerre com X e reabra a conversa pelo Hub para ir ao tmux.",
-    };
-  }
-  if (ids.length > 1) return { refuse: "vários resumes nesse grupo — migre a conversa pelo Hub." };
-  return { pids, id: ids[0] };
+function runningBase(v: RunningVariant): number {
+  const title = 2; // Title + margin
+  const info = 2; // runtime · dir + margin
+  const resume = v.convo ? 2 : 0; // resume: <id> + margin
+  const warning = v.ended ? 2 : v.tmux ? 3 + (v.procs > 0 ? 1 : 0) : 4; // block + margin
+  const listHeader = !v.ended && (v.tmux || v.convo) ? 2 : 0; // "— log · …" / placeholder + margin
+  const footer = 1 + 2; // StatusLine + HintBar (margin + 1)
+  return title + info + resume + warning + listHeader + footer;
+}
+
+/** Whether this variant draws the boat: only when two more rows still fit
+ *  over the minimum list at this height. */
+export function runningBoat(v: RunningVariant, rows: number, env: NodeJS.ProcessEnv = process.env): boolean {
+  return boatFits(rows, runningBase(v) + MIN_LIST_ROWS, env);
+}
+
+export function runningChromeRows(v: RunningVariant, rows: number, env: NodeJS.ProcessEnv = process.env): number {
+  return runningBase(v) + (runningBoat(v, rows, env) ? VOYAGE_ROWS : 0);
 }
 
 export default function Running({ target, onBack, onQuit, onLaunch, onAttach, onMigrate }: Props) {
@@ -80,11 +99,25 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach, on
     tmux ? capturePane(tmux) : [],
   );
   const [hiddenTail, setHiddenTail] = useState(0); // transcript lines hidden below the fold
-  const [armed, setArmed] = useState(false);
-  const [armedMigrate, setArmedMigrate] = useState(false);
-  const [killing, setKilling] = useState(false);
+  // read in handlers through refs: coalesced keys see every update at once
+  const [, armedRef, setArmed] = useLive(false);
+  const [, armedMigrateRef, setArmedMigrate] = useLive(false);
+  const [, killingRef, setKilling] = useLive(false);
   const [msg, setMsg] = useState("");
-  const { stdout } = useStdout();
+  const { rows } = useTermSize();
+  const [tmuxOk] = useState(() => tmuxUsable());
+  // late results (a kill or migration finishing after esc) must never pop
+  // a screen the user opened since
+  const left = useRef(false);
+  useEffect(
+    () => () => {
+      left.current = true;
+    },
+    [],
+  );
+  const back = () => {
+    if (!left.current) onBack();
+  };
 
   const ended = tmux ? !tmuxAlive : procs.length === 0;
   const runtime = target.kind === "session" ? target.session.runtime : target.convo.harness;
@@ -94,7 +127,14 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach, on
   const icon = RUNTIME_ICON[runtime] ?? "•";
   const iconColor = RUNTIME_COLOR[runtime] ?? theme.text;
 
-  const listHeight = Math.max(5, (stdout?.rows || 24) - 12);
+  const variant: RunningVariant = {
+    convo: target.kind === "convo",
+    ended,
+    tmux: tmux !== null,
+    procs: procs.length,
+  };
+  const boat = runningBoat(variant, rows);
+  const listHeight = Math.max(MIN_LIST_ROWS, rows - runningChromeRows(variant, rows));
   const totalLines = tmux ? tmuxLines.length : peekLines.length;
   const maxHidden = Math.max(0, totalLines - listHeight);
   const hidden = Math.min(hiddenTail, maxHidden);
@@ -104,16 +144,16 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach, on
   const scrollable = totalLines > listHeight;
 
   const kill = async () => {
-    if (killing) return;
+    if (killingRef.current) return;
     setKilling(true);
     if (tmux) {
       setMsg("encerrando sessão tmux…");
       if (!hasSession(tmux)) {
-        onBack(); // died on its own while viewing
+        back(); // died on its own while viewing
         return;
       }
       if (killSession(tmux) && !hasSession(tmux)) {
-        onBack();
+        back();
         return;
       }
       setKilling(false);
@@ -124,12 +164,12 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach, on
     setMsg("encerrando…");
     const fresh = resolveProcs(target).map((p) => p.pid);
     if (fresh.length === 0) {
-      onBack(); // died on its own while viewing
+      back(); // died on its own while viewing
       return;
     }
     const result = await terminatePids(fresh);
     if (result.alive.length === 0) {
-      onBack();
+      back();
       return;
     }
     setKilling(false);
@@ -137,50 +177,25 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach, on
     setMsg(`não consegui encerrar o PID ${result.alive.join(", ")} — sem permissão?`);
   };
 
-  /** Move an external session under tmux, staying in Atlas: its pid(s) must
-   *  die first (a duplicate resume corrupts the session), then the same
-   *  conversation relaunches detached. Aborts if anything stays alive. */
+  /** Move an external session under tmux, staying in Atlas (see migrate.ts). */
+  const migrationFor = (): Migration =>
+    target.kind === "convo"
+      ? convoMigration(target.convo)
+      : sessionMigration(target.session, "o processo já encerrou — esc volta ao Hub.");
+
   const migrate = async () => {
-    if (killing) return;
-    let pids: number[];
-    let dir: string;
-    let runtime: string;
-    let resume: string;
-    if (target.kind === "convo") {
-      pids = pidsForResume(target.convo.id);
-      dir = target.convo.dir ?? homedir();
-      runtime = target.convo.harness;
-      resume = target.convo.id;
-    } else {
-      const r = resolveSessionMigrate(target.session.dir, target.session.runtime);
-      if (!("id" in r)) {
-        setMsg(r.refuse);
-        return;
-      }
-      pids = r.pids;
-      dir = target.session.dir;
-      runtime = target.session.runtime;
-      resume = r.id;
+    if (killingRef.current) return;
+    const m = migrationFor();
+    if ("refuse" in m) {
+      setMsg(m.refuse);
+      return;
     }
     setKilling(true);
     try {
-      const relaunch = () => {
-        const r = onMigrate({ dir, runtime, resume });
-        // back to Hub on success: fresh lists show the 𖥠 immediately
-        if (!r.ok) setMsg(r.error ?? "não consegui criar a sessão tmux.");
-        else onBack();
-      };
-      if (pids.length === 0) {
-        relaunch(); // died on its own: revive straight into tmux
-        return;
-      }
-      setMsg("encerrando aqui para migrar…");
-      const result = await terminatePids(pids);
-      if (result.alive.length > 0) {
-        setMsg(`não consegui encerrar o PID ${result.alive.join(", ")} — migração abortada.`);
-        return;
-      }
-      relaunch();
+      const r = await runMigration(m, onMigrate, setMsg);
+      // back to Hub on success: fresh lists show the 𖥠 immediately
+      if (r.ok) back();
+      else setMsg(r.error!);
     } finally {
       setKilling(false);
     }
@@ -198,9 +213,12 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach, on
 
   useInput((input, key) => {
     if (key.ctrl && input === "c") {
-      onQuit();
+      onQuit(); // App waits for an in-flight migration before exiting
       return;
     }
+    // between SIGTERM and relaunch nothing else may act — not even esc: a
+    // Hub opened now could quit and strand the agent stopped
+    if (killingRef.current || migrationInFlight()) return;
     if (key.escape) {
       onBack(); // leaving never touches the original process
       return;
@@ -234,7 +252,7 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach, on
       refreshTmux();
     } else if (input === "X" && !key.ctrl && !key.meta && !ended) {
       setArmedMigrate(false);
-      if (!armed) {
+      if (!armedRef.current) {
         setArmed(true);
         setMsg(
           tmux
@@ -248,14 +266,13 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach, on
       }
     } else if (input === "T" && !key.ctrl && !key.meta && !ended && !tmux) {
       setArmed(false);
-      if (!armedMigrate) {
-        // sessions pre-resolve: refuse now instead of arming a dead end
-        if (target.kind === "session") {
-          const r = resolveSessionMigrate(target.session.dir, target.session.runtime);
-          if (!("id" in r)) {
-            setMsg(r.refuse);
-            return;
-          }
+      if (!armedMigrateRef.current) {
+        // resolve now (tmux, dir, runtime, resume ids): refuse instead of
+        // arming a dead end
+        const m = migrationFor();
+        if ("refuse" in m) {
+          setMsg(m.refuse);
+          return;
         }
         setArmedMigrate(true);
         setMsg("T de novo para migrar para o tmux (encerra aqui, continua lá em 2º plano).");
@@ -277,7 +294,7 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach, on
             : "Sessão em execução · somente leitura"}
       </Title>
       <Box marginBottom={1}>
-        <Text>
+        <Text wrap="truncate">
           <Text color={iconColor}>{`${icon} `}</Text>
           <Text color={theme.text}>{`${runtime} ${name}`}</Text>
           <Text dimColor>{`  ·  ${dir ? shorten(dir) : "—"}`}</Text>
@@ -285,12 +302,12 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach, on
       </Box>
       {target.kind === "convo" && (
         <Box marginBottom={1}>
-          <Text dimColor>resume: {target.convo.id}</Text>
+          <Dim>resume: {target.convo.id}</Dim>
         </Box>
       )}
       {ended ? (
         <Box marginBottom={1}>
-          <Text color={theme.amber}>
+          <Text color={theme.amber} wrap="truncate">
             ⚠ a sessão encerrou sozinha antes de abrir — Enter abre agora, esc volta.
           </Text>
         </Box>
@@ -372,11 +389,12 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach, on
               : [
                   ["esc", "voltar sem matar"],
                   ["X", "encerrar sessão"],
-                  ["T", "migrar p/ tmux"],
+                  ...(tmuxOk ? [["T", "migrar p/ tmux"] as [string, string]] : []),
                   ...(scrollable ? [["↑↓", "rolar"] as [string, string]] : []),
                 ]
         }
       />
+      <Voyage show={boat} />
     </Box>
   );
 }

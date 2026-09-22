@@ -27,7 +27,8 @@ different screens, so each action lists its key and screen.
 | Hub | `r` | `runtime` | Cycle the selected history row's runtime |
 | Hub | `d` | `remover` | Remove a stopped session from history (refused while running) |
 | Hub | `X` | `matar` | Kill: end the selected running session (press twice) |
-| Hub | `/` | `filtrar` | Filter sessions and conversations (typing also filters) |
+| Hub | `T` | `tmux` | Move the selected session or conversation into tmux in the background (press twice) |
+| Hub | `/` | `filtrar` | Filter sessions and conversations (typing also filters; shown on narrow screens) |
 | Hub | `q` | `sair` | Quit Atlas |
 | Hub, filtering | `↑↓` / `esc` | `navegar` / `lista` | Move the selection / clear the filter and return to the list |
 | New session (`Nova sessão`) | `Enter` | `confirmar` | Use the highlighted directory, or the pasted one (`⤷ usar …`) |

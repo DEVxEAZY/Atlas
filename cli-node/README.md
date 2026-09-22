@@ -77,8 +77,8 @@ conversations resume through each runtime's own arguments, not a replacement
 conversation store. Keep the shipped UI in pt-BR and launch documentation in
 English unless a localization change is explicitly designed.
 
-External conversation and history rows offer double `T` to migrate into tmux
-in the background. Migration stops the external processes before resuming the
+External conversation and history rows offer double `T` (in the Hub and in
+the management view) to migrate into tmux in the background. Migration stops the external processes before resuming the
 conversation. History rows require exactly one resume ID; shell sessions,
 missing IDs, and ambiguous groups are refused with guidance. Verify
 runtime-specific behavior before changing this path.
@@ -90,7 +90,8 @@ runtime-specific behavior before changing this path.
 | --- | --- |
 | `ATLAS_ROOTS` | Colon-separated roots; default `~/@development:~/@megavale-repos` |
 | `ATLAS_HISTORY_FILE` | Defaults to `~/.local/share/atlas/history.json` |
-| `ATLAS_TMUX_BIN` | Override the tmux executable; default lookup on `PATH` |
+| `ATLAS_TMUX_BIN` | Override the tmux executable (empty = no tmux, direct launch); default lookup on `PATH` |
+| `ATLAS_NO_BOAT` | Set to `1` to hide the footer boat animation |
 
 Use disposable repositories and an alternate history file for manual checks.
 History isolation alone does not hide native conversations or other tmux
