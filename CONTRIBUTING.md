@@ -49,6 +49,7 @@ Run these checks from the repository root:
 
 ```sh
 cd cli-node
+bun run typecheck
 bun test tests/
 bun run build
 cd ..

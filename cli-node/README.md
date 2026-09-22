@@ -12,6 +12,7 @@ From the repository root, with Bun installed (release builds pin 1.4.2):
 cd cli-node
 bun install --frozen-lockfile
 bun run atlas
+bun run typecheck
 bun test tests/
 bun run build
 ```
@@ -20,7 +21,7 @@ bun run build
 machine. The [release workflow](../.github/workflows/release.yml) builds
 `bun-linux-x64-baseline` and `bun-linux-arm64`, archives each executable,
 and attaches SHA-256 checksums. The release version lives in `package.json`.
-CI installs with the frozen lockfile, runs the full suite, and builds.
+CI installs with the frozen lockfile, typechecks, runs the full suite, and builds.
 
 Tests expect commands named `codex`, `claude`, and `muse` on `PATH`; CI uses
 no-op shims. Tests use fixtures/fake tmux and do not require agent accounts.

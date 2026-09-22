@@ -24,7 +24,8 @@
   "scripts": {
     "atlas": "bun src/main.tsx",
     "build": "bun build --compile src/main.tsx --outfile dist/atlas",
-    "test": "bun test tests/"
+    "test": "bun test tests/",
+    "typecheck": "tsc -p ."
   },
   "dependencies": {
     "ink": "^7.1.1",
@@ -35,6 +36,7 @@
     "@types/react": "^19.3.0",
     "bun-types": "^1.4.2",
     "ink-testing-library": "^4.0.0",
-    "react-devtools-core": "7.0.1"
+    "react-devtools-core": "7.0.1",
+    "typescript": "5"
   }
 }

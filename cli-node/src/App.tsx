@@ -17,14 +17,22 @@ export interface Choice {
   attachTmux?: string;
 }
 
-type Screen =
+export type Screen =
   | { name: "hub" }
   | { name: "dir"; title: string; domain: string | null }
   | { name: "runtime"; dir: string; fresh: boolean }
   | { name: "running"; target: RunningTarget };
 
-export default function App({ onDone }: { onDone: (c: Choice | null) => void }) {
-  const [stack, setStack] = useState<Screen[]>([{ name: "hub" }]);
+interface Props {
+  onDone: (c: Choice | null) => void;
+  /** Open straight on this screen (`atlas DIR`); esc falls back to the Hub. */
+  start?: Screen;
+}
+
+export default function App({ onDone, start }: Props) {
+  const [stack, setStack] = useState<Screen[]>(() =>
+    start && start.name !== "hub" ? [{ name: "hub" }, start] : [{ name: "hub" }],
+  );
   const candidates = useMemo(() => discover(), []);
 
   const push = (s: Screen) => setStack((st) => [...st, s]);

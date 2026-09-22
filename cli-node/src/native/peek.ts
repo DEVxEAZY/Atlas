@@ -1,7 +1,7 @@
 /** Read-only transcript peek for the running-session view (bounded tail). */
 
 import { closeSync, fstatSync, openSync, readSync } from "node:fs";
-import { oneLine, type Harness } from "./types";
+import { oneLine, typedText, type Harness } from "./types";
 
 /** Last maxBytes of a file (never loads multi-MB logs fully). */
 export function readTail(file: string, maxBytes: number): string | null {
@@ -63,14 +63,15 @@ function peekClaudeLine(line: string): PeekLine | null {
   } catch {
     return null;
   }
-  if (obj.isSidechain === true) return null;
+  if (obj.isSidechain === true || obj.isMeta === true) return null;
   const role = obj.type === "user" ? "você" : obj.type === "assistant" ? "agente" : null;
   if (!role) return null;
   const message = obj.message as Record<string, unknown> | undefined;
   const content = typeof message === "string" ? message : message?.content;
   for (const text of textParts(content)) {
-    const trimmed = text.trim();
-    if (trimmed) return { role, text: oneLine(trimmed) };
+    // `<command-name>`, `<local-command-stdout>`…: harness echoes, not turns
+    const shown = role === "você" ? typedText(text) : text.trim();
+    if (shown) return { role, text: oneLine(shown) };
   }
   return null;
 }
