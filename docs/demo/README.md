@@ -34,7 +34,14 @@ caption identifies its read-only behavior without inventing a UI label.
 The GIF is 1100×700, 22 seconds, 44 frames at 2 fps, with an infinite loop.
 Static holds give time to read, keep text crisp, and limit repository size.
 The social preview is a solid 1280×640 composition with a scaled view of
-the same complete Hub. The full-size Hub is `../atlas-hub.svg` (1000×470).
+the same complete Hub. The full-size Hub is `../atlas-hub.svg` (1000×536).
+
+Since v0.3.0 the static Hub (`../atlas-hub.svg`, `../social-preview.svg`)
+shows the current wide hint bar (`T tmux`, no `/ filtrar`) and the footer
+boat, a real `voyageFrame(64, 62)` from `cli-node/src/components/Voyage.tsx`.
+The GIF scenes still show the v0.1.0 hint bar; regenerate them with the
+script below when the storyboard changes. To re-render only the social
+preview, call `render()` from `render.py` on `../social-preview.svg`.
 
 ## Rebuild locally
 
@@ -58,5 +65,6 @@ render used Chrome headless shell 131.0.6778.85, ffmpeg 6.1.1-3ubuntu5,
 Pillow 10.2.0, and the system DejaVu fonts (font revision 2.37).
 
 Edit SVGs with a text or vector editor; keep shared Hub content consistent
-in `../atlas-hub.svg`, `../social-preview.svg`, and `04-hub.svg`. There are no
+in `../atlas-hub.svg`, `../social-preview.svg`, and `04-hub.svg` (the last
+one only when the GIF is regenerated). There are no
 embedded bitmaps, downloaded assets, or AI-generated images in the sources.
