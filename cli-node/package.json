@@ -1,6 +1,6 @@
 {
   "name": "atlas-cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Terminal session manager for coding agents, backed by tmux.",
   "private": true,
   "license": "MIT",
@@ -25,7 +25,8 @@
     "atlas": "bun src/main.tsx",
     "build": "bun build --compile src/main.tsx --outfile dist/atlas",
     "test": "bun test tests/",
-    "typecheck": "tsc -p ."
+    "typecheck": "tsc -p .",
+    "pack:npm": "bun scripts/pack-npm.ts"
   },
   "dependencies": {
     "ink": "^7.1.1",

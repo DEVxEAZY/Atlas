@@ -2,7 +2,9 @@
 
 All notable changes to Atlas are documented in this file.
 
-## [Unreleased]
+## [0.2.0] - 2026-09-22
+
+- Published on npm as `@devxeazy/atlas-cli` (requires Bun on `PATH`).
 
 - `atlas DIR` (for example `atlas .`) re-enters a directory's session: it
   attaches to a live Atlas tmux session, opens the management view of an
