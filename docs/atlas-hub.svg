@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="470" viewBox="0 0 1000 470" xml:space="preserve" font-family="DejaVu Sans Mono,monospace" role="img" aria-label="Atlas Hub — três sessões ao vivo em ◉ agora, gerenciadas no tmux">
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="536" viewBox="0 0 1000 536" xml:space="preserve" font-family="DejaVu Sans Mono,monospace" role="img" aria-label="Atlas Hub — três sessões ao vivo em ◉ agora, gerenciadas no tmux">
   <title>Atlas Hub — três sessões ao vivo em ◉ agora, gerenciadas no tmux</title>
   <defs>
     <!-- Hand-drawn vector equivalent of TMUX_MARK (𖥠, U+16960).
@@ -10,7 +10,7 @@
       <circle cx="2" cy="10" r="1.2"/><circle cx="18" cy="10" r="1.2"/>
     </g>
   </defs>
-  <rect x="1" y="1" width="998" height="468" rx="14" fill="#0D0D0D" stroke="#2A2A2A"/>
+  <rect x="1" y="1" width="998" height="534" rx="14" fill="#0D0D0D" stroke="#2A2A2A"/>
   <circle cx="25" cy="23" r="4" fill="#FFB386"/><circle cx="43" cy="23" r="4" fill="#FF8F6B"/><circle cx="61" cy="23" r="4" fill="#F472A0"/>
   <text style="white-space:pre" x="500" y="29" fill="#8A8A8A" font-size="16" text-anchor="middle">atlas</text>
   <path d="M1 47H999" stroke="#2A2A2A"/>
@@ -39,11 +39,8 @@
   <text style="white-space:pre" x="32" y="326" fill="#FFB386" font-size="20" >▸ Recentes · 3</text>
   <text style="white-space:pre" x="32" y="357" fill="#FF8F6B" font-size="20" >▸ Conversas · nenhuma</text>
   <text style="white-space:pre" x="56" y="388" fill="#FFB386" font-size="20" >◆</text><text style="white-space:pre" x="84" y="388" fill="#F8F4EB" font-size="20" >@development</text><text style="white-space:pre" x="242" y="388" fill="#8A8A8A" font-size="20" >· 3 repos</text>
-  <text style="white-space:pre" x="32" y="442" fill="#FFB386" font-size="18" >Enter</text><text style="white-space:pre" x="87" y="442" fill="#8A8A8A" font-size="18" > abrir · </text>
-  <text style="white-space:pre" x="183" y="442" fill="#FFB386" font-size="18" >n</text><text style="white-space:pre" x="195" y="442" fill="#8A8A8A" font-size="18" > nova · </text>
-  <text style="white-space:pre" x="281" y="442" fill="#FFB386" font-size="18" >r</text><text style="white-space:pre" x="293" y="442" fill="#8A8A8A" font-size="18" > runtime · </text>
-  <text style="white-space:pre" x="411" y="442" fill="#FFB386" font-size="18" >d</text><text style="white-space:pre" x="423" y="442" fill="#8A8A8A" font-size="18" > remover · </text>
-  <text style="white-space:pre" x="541" y="442" fill="#FFB386" font-size="18" >X</text><text style="white-space:pre" x="553" y="442" fill="#8A8A8A" font-size="18" > matar · </text>
-  <text style="white-space:pre" x="649" y="442" fill="#FFB386" font-size="18" >/</text><text style="white-space:pre" x="661" y="442" fill="#8A8A8A" font-size="18" > filtrar · </text>
-  <text style="white-space:pre" x="779" y="442" fill="#FFB386" font-size="18" >q</text><text style="white-space:pre" x="791" y="442" fill="#8A8A8A" font-size="18" > sair</text>
+  <text style="white-space:pre" x="32" y="442" font-size="18"><tspan fill="#FFB386">Enter</tspan><tspan fill="#8A8A8A"> abrir</tspan><tspan fill="#8A8A8A"> · </tspan><tspan fill="#FFB386">n</tspan><tspan fill="#8A8A8A"> nova</tspan><tspan fill="#8A8A8A"> · </tspan><tspan fill="#FFB386">r</tspan><tspan fill="#8A8A8A"> runtime</tspan><tspan fill="#8A8A8A"> · </tspan><tspan fill="#FFB386">d</tspan><tspan fill="#8A8A8A"> remover</tspan><tspan fill="#8A8A8A"> · </tspan><tspan fill="#FFB386">X</tspan><tspan fill="#8A8A8A"> matar</tspan><tspan fill="#8A8A8A"> · </tspan><tspan fill="#FFB386">T</tspan><tspan fill="#8A8A8A"> tmux</tspan><tspan fill="#8A8A8A"> · </tspan><tspan fill="#FFB386">q</tspan><tspan fill="#8A8A8A"> sair</tspan></text>
+  <!-- footer boat: voyageFrame(64, 62) from cli-node/src/components/Voyage.tsx -->
+  <text style="white-space:pre" x="32" y="473" fill="#F8F4EB" font-size="20">                           |\                                   </text>
+  <text style="white-space:pre" x="32" y="504" font-size="20"><tspan fill="#8A8A8A">~~--~-~~~-~~-~~~--~-~~~-~~</tspan><tspan fill="#FFB386">\___/</tspan><tspan fill="#8A8A8A">-~-~~~-~~-~~~--~-~~~-~~-~~~--~-~~</tspan></text>
 </svg>
