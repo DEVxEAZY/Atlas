@@ -38,7 +38,11 @@ the same complete Hub. The full-size Hub is `../atlas-hub.svg` (1000×536).
 
 Since v0.3.0 the static Hub (`../atlas-hub.svg`, `../social-preview.svg`)
 shows the current wide hint bar (`T tmux`, no `/ filtrar`) and the footer
-boat, a real `voyageFrame(64, 62)` from `cli-node/src/components/Voyage.tsx`.
+boat, the one-row `ོ𓂃𖠳𓂃` motif of `cli-node/src/components/Voyage.tsx`
+(gull, wave, sailboat, wave). Its glyphs are vector outlines taken from
+Noto Serif Tibetan, Noto Sans Egyptian Hieroglyphs and Noto Sans Bamum
+(SIL Open Font License 1.1), because those fonts are missing from common
+renderers — the same approach as the hand-drawn `𖥠`.
 The GIF scenes still show the v0.1.0 hint bar; regenerate them with the
 script below when the storyboard changes. To re-render only the social
 preview, call `render()` from `render.py` on `../social-preview.svg`.
@@ -67,4 +71,5 @@ Pillow 10.2.0, and the system DejaVu fonts (font revision 2.37).
 Edit SVGs with a text or vector editor; keep shared Hub content consistent
 in `../atlas-hub.svg`, `../social-preview.svg`, and `04-hub.svg` (the last
 one only when the GIF is regenerated). There are no
-embedded bitmaps, downloaded assets, or AI-generated images in the sources.
+embedded bitmaps or AI-generated images in the sources; the only outside
+material is the Noto glyph outlines of the footer boat (OFL 1.1).

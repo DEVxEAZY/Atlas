@@ -73,7 +73,7 @@ function runningBase(v: RunningVariant): number {
   return title + info + resume + warning + listHeader + footer;
 }
 
-/** Whether this variant draws the boat: only when two more rows still fit
+/** Whether this variant draws the boat: only when its row still fits
  *  over the minimum list at this height. */
 export function runningBoat(v: RunningVariant, rows: number, env: NodeJS.ProcessEnv = process.env): boolean {
   return boatFits(rows, runningBase(v) + MIN_LIST_ROWS, env);
