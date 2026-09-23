@@ -83,10 +83,14 @@ export const MIN_LIST_ROWS = 3;
 export const VOYAGE_ROWS = 1;
 /** Rows with the night sky over the sea. */
 export const VOYAGE_SKY_ROWS = 2;
+/** Rows with a second row of stars in the sky. */
+export const VOYAGE_STARS_ROWS = 3;
 /** Below this many terminal rows the boat stays docked (not drawn). */
 export const VOYAGE_MIN_ROWS = 16;
 /** Below this many terminal rows the sky is left out. */
 export const SKY_MIN_ROWS = 24;
+/** Below this many terminal rows the sky keeps a single row. */
+export const STARS_MIN_ROWS = 28;
 
 /** Off when ATLAS_NO_BOAT is set (any non-empty value but "0"). */
 export function voyageEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -95,8 +99,8 @@ export function voyageEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
 }
 
 /** Rows the footer painting takes under a screen whose other rows (chrome
- *  plus the minimum content it must show) take `fixedRows`: 2 (sky and
- *  sea), 1 (sea only) or 0. It animates, and an Ink frame taller than the
+ *  plus the minimum content it must show) take `fixedRows`: 3 (two sky
+ *  rows and the sea), 2 (sky and sea), 1 (sea only) or 0. It animates, and an Ink frame taller than the
  *  terminal is fully cleared on every render, so it is drawn only where it
  *  can never push the frame past the window. */
 export function voyageRowsFor(
@@ -107,6 +111,7 @@ export function voyageRowsFor(
   const r = rows || DEFAULT_ROWS;
   if (!voyageEnabled(env) || r < VOYAGE_MIN_ROWS) return 0;
   const spare = r - fixedRows;
+  if (r >= STARS_MIN_ROWS && spare >= VOYAGE_STARS_ROWS) return VOYAGE_STARS_ROWS;
   if (r >= SKY_MIN_ROWS && spare >= VOYAGE_SKY_ROWS) return VOYAGE_SKY_ROWS;
   return spare >= VOYAGE_ROWS ? VOYAGE_ROWS : 0;
 }

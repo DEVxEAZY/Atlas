@@ -13,6 +13,7 @@ import { isTmpDir } from "../src/rows";
 import type { NativeSession } from "../src/native/index";
 import { KEY, LIVE_SPIN_RE, burst, key, mount, sleep, waitFor, waitFrame } from "./ink-helpers";
 import { setupFakeTmux, type FakeTmux } from "./tmux-fake";
+import { getSettings, loadSettings } from "../src/settings";
 
 let tmpdirs: string[] = [];
 let fakeTmux: FakeTmux[] = [];
@@ -1115,6 +1116,23 @@ describe("tui", () => {
       const saved = load().find((s) => s.dir === target);
       expect(saved?.runtime).toBe("claude");
       expect(saved?.uses).toBe(1); // rekey, not a fresh record bump
+    } finally {
+      app.unmount();
+    }
+  });
+
+  test("A sets the boat sailing and back to anchor, and remembers it", async () => {
+    setupEnv();
+    const app = mount(<App onDone={() => {}} />);
+    try {
+      await waitFrame(app, (f) => f.includes("Recentes"));
+      expect(getSettings().sail).toBe(false);
+      await key(app, "A");
+      await waitFrame(app, (f) => f.includes("Barco navegando"));
+      expect(loadSettings().sail).toBe(true);
+      await key(app, "A");
+      await waitFrame(app, (f) => f.includes("Barco ancorado"));
+      expect(loadSettings().sail).toBe(false);
     } finally {
       app.unmount();
     }

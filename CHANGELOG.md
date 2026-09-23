@@ -4,6 +4,16 @@ All notable changes to Atlas are documented in this file.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-23
+
+- A second, sparser row of stars joins the footer sky from 28 terminal rows
+  when all three footer rows fit.
+- The boat can sail again: `A` in the Hub sets it sailing or back to
+  anchor, and the choice is saved in `~/.local/share/atlas/settings.json`.
+  It rides at anchor by default. While sailing it glides one column every
+  125 ms and wraps around the edges without a jump; the sea and the stars
+  keep their pace, and the clock returns to 5 fps at anchor.
+
 ## [0.5.0] - 2026-09-23
 
 - Smoother TUI. Spinners and the footer painting share one animation

@@ -58,6 +58,7 @@ import {
 } from "../components/chrome";
 import Voyage from "../components/Voyage";
 import { pendingCount } from "./Crons";
+import { getSettings, updateSettings } from "../settings";
 import KpiTitle, { hubKpis } from "../components/Kpis";
 import { loadJobs, nextRun, whenLabel } from "../cron";
 import { useLive, useLiveIndex } from "../components/useLiveIndex";
@@ -135,7 +136,12 @@ export const HINTS_FULL: Array<[string, string]> = [
   ["q", "sair"],
 ];
 /** The full set plus the scheduled tasks key, on screens wide enough. */
-export const HINTS_WIDE: Array<[string, string]> = [...HINTS_FULL.slice(0, -1), ["C", "cron"], ["q", "sair"]];
+export const HINTS_WIDE: Array<[string, string]> = [
+  ...HINTS_FULL.slice(0, -1),
+  ["C", "cron"],
+  ["A", "barco"],
+  ["q", "sair"],
+];
 export const HINTS_SHORT: Array<[string, string]> = [
   ["Enter", "abrir"],
   ["n", "nova"],
@@ -883,6 +889,10 @@ export default function Hub({
       else if (expandedConvos) setExpandedConvos(false);
     } else if (input === "n") onNewSession();
     else if (input === "C" && !key.ctrl && !key.meta) onCrons?.();
+    else if (input === "A" && !key.ctrl && !key.meta) {
+      const { sail } = updateSettings({ sail: !getSettings().sail });
+      setMsg(sail ? "Barco navegando · A ancora." : "Barco ancorado · A solta as velas.");
+    }
     else if (input === "q") onQuit();
     else if (input === "/") setFocus("filter");
     else if (input === "r" || input === "d") {

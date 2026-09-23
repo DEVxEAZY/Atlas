@@ -12,3 +12,6 @@ process.env.ATLAS_CRONTAB_FILE = join(root, "crontab");
 // a developer's ATLAS_GLYPHS=safe must not change expected output
 // (tests/glyphs.test.ts covers both sets)
 delete process.env.ATLAS_GLYPHS;
+
+// the footer's sail setting lives in a throwaway file, never the real one
+process.env.ATLAS_SETTINGS_FILE = join(root, "settings.json");
