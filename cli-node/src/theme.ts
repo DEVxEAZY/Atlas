@@ -1,5 +1,7 @@
 /** Atlas OLED theme with the sunset neon soft accent pack. */
 
+import { G } from "./glyphs";
+
 export const theme = {
   bg: "#000000",
   surface: "#0D0D0D",
@@ -35,12 +37,7 @@ export const RUNTIME_COLOR: Record<string, string> = {
   shell: theme.dim,
 };
 
-export const RUNTIME_ICON: Record<string, string> = {
-  codex: "⬢",
-  claude: "✳",
-  muse: "◈",
-  shell: "▸",
-};
+export const RUNTIME_ICON: Record<string, string> = G.runtime;
 
 /** Marks sessions Atlas manages in tmux (visible in titles and live rows). */
-export const TMUX_MARK = "𖥠";
+export const TMUX_MARK = G.tmux;

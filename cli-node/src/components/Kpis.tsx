@@ -4,6 +4,7 @@
 import React from "react";
 import { Box, Text } from "ink";
 import { theme, RUNTIME_COLOR, RUNTIME_ICON, TMUX_MARK } from "../theme";
+import { G } from "../glyphs";
 
 export interface KpiPart {
   text: string;
@@ -22,7 +23,6 @@ export interface KpiInput {
   tmux: number;
   cron: { active: number; pending: number; next: string | null };
   sessions: number;
-  conversations: number;
 }
 
 const RUNTIMES = ["claude", "codex", "muse", "shell"];
@@ -33,25 +33,25 @@ export function hubKpis(k: KpiInput): Kpi[] {
   const now = Object.values(k.live).reduce((a, b) => a + b, 0);
   out.push(
     now > 0
-      ? [{ text: "◉ ", color: theme.live }, { text: String(now), color: theme.live, bold: true }, { text: " agora", dim: true }]
-      : [{ text: "○ nada rodando", dim: true }],
+      ? [{ text: `${G.live} `, color: theme.live }, { text: String(now), color: theme.live, bold: true }, { text: " agora", dim: true }]
+      : [{ text: `${G.idle} nada rodando`, dim: true }],
   );
   const byRuntime = RUNTIMES.filter((r) => (k.live[r] ?? 0) > 0);
   if (byRuntime.length > 0) {
     const kpi: Kpi = [];
     byRuntime.forEach((r, i) => {
       if (i > 0) kpi.push({ text: " " });
-      kpi.push({ text: RUNTIME_ICON[r] ?? "•", color: RUNTIME_COLOR[r] }, { text: String(k.live[r]), bold: true });
+      kpi.push({ text: RUNTIME_ICON[r] ?? G.bullet, color: RUNTIME_COLOR[r] }, { text: String(k.live[r]), bold: true });
     });
     out.push(kpi);
   }
   if (k.tmux > 0)
     out.push([{ text: `${TMUX_MARK} `, color: theme.peach }, { text: String(k.tmux), bold: true }, { text: " tmux", dim: true }]);
   if (k.cron.pending > 0)
-    out.push([{ text: "◷ ", color: theme.amber }, { text: String(k.cron.pending), color: theme.amber, bold: true }, { text: " aguardando", color: theme.amber }]);
+    out.push([{ text: `${G.clock} `, color: theme.amber }, { text: String(k.cron.pending), color: theme.amber, bold: true }, { text: " aguardando", color: theme.amber }]);
   if (k.cron.active > 0) {
     const kpi: Kpi = [
-      { text: "◷ ", color: theme.seaCrest },
+      { text: `${G.clock} `, color: theme.seaCrest },
       { text: String(k.cron.active), bold: true },
       { text: k.cron.active === 1 ? " agendada" : " agendadas", dim: true },
     ];
@@ -59,7 +59,6 @@ export function hubKpis(k: KpiInput): Kpi[] {
     out.push(kpi);
   }
   out.push([{ text: String(k.sessions), bold: true }, { text: k.sessions === 1 ? " sessão" : " sessões", dim: true }]);
-  out.push([{ text: String(k.conversations), bold: true }, { text: " conversas", dim: true }]);
   return out;
 }
 

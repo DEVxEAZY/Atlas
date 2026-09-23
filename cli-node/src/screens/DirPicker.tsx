@@ -16,6 +16,7 @@ import { Dim, HeaderRow, HintBar, ItemRow, Title, voyageRowsFor } from "../compo
 import { useTermSize } from "../components/useTermSize";
 import Voyage from "../components/Voyage";
 import { useLiveIndex } from "../components/useLiveIndex";
+import { G } from "../glyphs";
 
 interface Props {
   title: string;
@@ -25,7 +26,7 @@ interface Props {
   onQuit: () => void;
 }
 
-const MARKER: Record<string, string> = { domain: "◆", repo: "●", dir: "○" };
+const MARKER: Record<string, string> = { domain: G.domain, repo: G.repo, dir: G.dir };
 
 export default function DirPicker({ title, candidates, onPick, onBack, onQuit }: Props) {
   const [query, setQuery] = useState("");
@@ -87,7 +88,7 @@ export default function DirPicker({ title, candidates, onPick, onBack, onQuit }:
           return (
             <ItemRow key={at} hot={hot}>
               <Text color={hot ? theme.highlightFg : theme.peach} wrap="truncate">
-                {fit(`⤷ usar ${shorten(row.path)}`, inner)}
+                {fit(`${G.use} usar ${shorten(row.path)}`, inner)}
               </Text>
             </ItemRow>
           );
@@ -96,7 +97,7 @@ export default function DirPicker({ title, candidates, onPick, onBack, onQuit }:
           <ItemRow key={at} hot={hot}>
             <Text wrap="truncate">
               <Text color={hot ? theme.highlightFg : theme.peach}>
-                {`  ${MARKER[row.candidate.kind] ?? "○"} `}
+                {`  ${MARKER[row.candidate.kind] ?? G.dir} `}
               </Text>
               <Text color={hot ? theme.highlightFg : theme.text}>
                 {fit(candidateDisplay(row.candidate), inner - 4)}

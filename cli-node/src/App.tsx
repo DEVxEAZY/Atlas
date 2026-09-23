@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { useInput } from "ink";
+import { holdForInput } from "./components/clock";
 import { discover } from "./repos";
 import Hub from "./screens/Hub";
 import DirPicker from "./screens/DirPicker";
@@ -41,6 +43,8 @@ export default function App({ onDone: done, start, notice }: Props) {
     if (migrationInFlight()) void migrationsSettled().then(() => done(c));
     else done(c);
   };
+  // every key, on every screen, pauses the animations for a moment
+  useInput(() => holdForInput());
   const [stack, setStack] = useState<Screen[]>(() =>
     start && start.name !== "hub" ? [{ name: "hub" }, start] : [{ name: "hub" }],
   );

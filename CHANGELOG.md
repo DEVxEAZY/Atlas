@@ -4,6 +4,26 @@ All notable changes to Atlas are documented in this file.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-23
+
+- Smoother TUI. Spinners and the footer painting share one animation
+  clock (5 fps), so each tick is one redraw instead of one per timer, and
+  every keypress holds the animations for a moment so navigation redraws
+  first. A spinner is its own leaf and Hub rows are memoized: a tick or a
+  move re-renders the spinner or the two rows that changed, not the whole
+  list. The Hub's 2-second refresh reads /proc and asks tmux without
+  blocking, the first frame runs one process walk instead of three, and
+  coming back from tmux opens on the conversations already read. In a
+  fixed scenario an idle Hub uses about a third of the CPU it did.
+
+- Every symbol the TUI draws now comes from one glyph set. The default is
+  Atlas's own look; `ATLAS_GLYPHS=safe` swaps in portable symbols (ASCII
+  plus WGL4, covered by Consolas, Lucida Console and Cascadia) for
+  terminals whose fonts lack them, with a portable boat, `v~\_|_/~`.
+  `✳` and `⚠`, which also exist as emoji, now carry U+FE0E so terminals
+  draw them one column wide instead of over the next character.
+- The Hub KPI strip no longer shows the conversation total.
+
 - The Hub title is a KPI strip: agents running now (with a per-runtime
   breakdown), Atlas tmux sessions, scheduled tasks waiting for confirmation,
   active ones and the next run, then sessions and conversations. It stays on

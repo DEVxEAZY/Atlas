@@ -5,6 +5,7 @@
  */
 
 import { readdirSync, readFileSync, readlinkSync, statSync } from "node:fs";
+import { readdir, readFile, readlink } from "node:fs/promises";
 import { basename, join } from "node:path";
 
 export const HARNESS_BINS = ["codex", "claude", "muse"] as const;
@@ -97,6 +98,40 @@ export function scanAgents(
     out.push({ pid: Number(pid), dir: cwd, bin: hit, argv: argv.filter((a) => a !== "") });
   }
   return out;
+}
+
+/** scanAgents without blocking: the same walk with async reads, so the
+ *  Hub's background refresh never stalls a keypress. */
+export async function scanAgentsAsync(
+  names: readonly string[] = HARNESS_BINS,
+  procRoot: string = "/proc",
+): Promise<AgentProc[]> {
+  if (names.length === 0) return [];
+  let entries: string[];
+  try {
+    entries = await readdir(procRoot);
+  } catch {
+    return [];
+  }
+  const found = await Promise.all(
+    entries
+      .filter((pid) => /^\d+$/.test(pid))
+      .map(async (pid): Promise<AgentProc | null> => {
+        const [exe, cmdline] = await Promise.all([
+          readlink(join(procRoot, pid, "exe")).catch(() => null),
+          readFile(join(procRoot, pid, "cmdline"), "utf-8").catch(() => null),
+        ]);
+        const argv = cmdline === null ? [] : cmdline.split("\0");
+        if (!exe && argv.length === 0) return null;
+        const cands = candidates(exe, argv);
+        const hit = names.find((n) => cands.some((c) => matchBin(c, n)));
+        if (!hit) return null;
+        const cwd = await readlink(join(procRoot, pid, "cwd")).catch(() => null);
+        if (cwd === null) return null;
+        return { pid: Number(pid), dir: cwd, bin: hit, argv: argv.filter((x) => x !== "") };
+      }),
+  );
+  return found.filter((a): a is AgentProc => a !== null);
 }
 
 /** "dir\0bin" keys for an agent list (one /proc walk feeds every index). */

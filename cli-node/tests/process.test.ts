@@ -14,6 +14,8 @@ import {
   runningKeys,
   runningResumeIds,
   runtimeForCommand,
+  scanAgents,
+  scanAgentsAsync,
   scanProcesses,
   terminatePids,
   ttyForPid,
@@ -43,6 +45,21 @@ describe("process scan", () => {
     await new Promise((r) => setTimeout(r, 100));
     const found = scanProcesses(["sleep"]);
     expect(found.get(base)).toContain("sleep");
+  });
+
+  test("the async scan finds the same agents as the sync one", async () => {
+    const base = mkdtempSync(join(tmpdir(), "atlas-proc-"));
+    tmpdirs.push(base);
+    const p = Bun.spawn(["sleep", "30"], { cwd: base, stdout: "ignore", stderr: "ignore" });
+    procs.push(p);
+    await new Promise((r) => setTimeout(r, 100));
+    const mine = (list: { pid: number; dir: string; bin: string }[]) =>
+      list.filter((a) => a.pid === p.pid).map(({ pid, dir, bin }) => ({ pid, dir, bin }));
+    const sync = mine(scanAgents(["sleep"]));
+    expect(sync).toEqual([{ pid: p.pid, dir: base, bin: "sleep" }]);
+    expect(mine(await scanAgentsAsync(["sleep"]))).toEqual(sync);
+    expect(await scanAgentsAsync([])).toEqual([]);
+    expect(await scanAgentsAsync(["sleep"], "/nonexistent-proc")).toEqual([]);
   });
 
   test("dead processes vanish from the scan", async () => {

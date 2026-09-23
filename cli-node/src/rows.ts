@@ -8,6 +8,7 @@ import { HARNESS_ORDER, NATIVE_SHOW_LIMIT, type Harness, type NativeSession } fr
 import { splitDomain, type Candidate } from "./repos";
 import { RUNTIME_ICON } from "./theme";
 import { ago, shorten } from "./util";
+import { G } from "./glyphs";
 
 export const HARNESS_LABEL: Record<Harness, string> = {
   claude: "Claude",
@@ -24,7 +25,7 @@ export function sessionDisplay(s: Session): string {
 }
 
 export function sessionLabel(s: Session): string {
-  const missing = existsSync(s.dir) ? "" : " ⚠";
+  const missing = existsSync(s.dir) ? "" : ` ${G.warn}`;
   return `${s.runtime} ${sessionDisplay(s)} · ${ago(s.last_used)} · ${s.uses}x${missing}`;
 }
 
@@ -93,7 +94,7 @@ export function filterCandidates(cands: Candidate[], query: string): Candidate[]
 }
 
 export function candidateDisplay(c: Candidate): string {
-  if (c.kind === "domain") return "⌂ raiz do domínio";
+  if (c.kind === "domain") return `${G.root} raiz do domínio`;
   const [, rel] = splitDomain(c.path);
   return rel || c.path.split("/").pop()!;
 }

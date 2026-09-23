@@ -7,6 +7,7 @@ import { resolve } from "node:path";
 import { render } from "ink";
 import App, { type Choice, type Screen } from "./App";
 import { cronMain } from "./cronCli";
+import { enableNativeCache } from "./screens/Hub";
 import { load, record, type Session } from "./history";
 import { runningKeys } from "./process";
 import { RUNTIME_ORDER, buildArgv } from "./runtimes";
@@ -24,6 +25,7 @@ import {
   type TmuxSession,
 } from "./tmux";
 import { ago, isDir, shorten } from "./util";
+import { G } from "./glyphs";
 
 export interface LaunchOpts {
   dryRun?: boolean;
@@ -217,6 +219,7 @@ export function backNotice(b: Back): string {
  *  detach (Ctrl-b d), or stays reachable with Ctrl-b L when nested. Leaves
  *  on quit, on a launch outside tmux, or on an error. */
 async function tui(start?: Screen, dryRun = false): Promise<number> {
+  enableNativeCache();
   let notice: string | undefined;
   for (;;) {
     const choice = await pick(start, notice);
@@ -241,7 +244,7 @@ export function listSessions(): number {
     return 0;
   }
   for (const s of sessions) {
-    const missing = existsSync(s.dir) ? "" : " ⚠";
+    const missing = existsSync(s.dir) ? "" : ` ${G.warn}`;
     console.log(`${s.runtime.padEnd(7)} ${shorten(s.dir)}  · ${ago(s.last_used)} · ${s.uses}x${missing}`);
   }
   return 0;

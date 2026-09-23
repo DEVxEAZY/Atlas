@@ -22,6 +22,7 @@ import { Dim, HeaderRow, HintBar, ItemRow, StatusLine, Title, voyageRowsFor } fr
 import { useTermSize } from "../components/useTermSize";
 import Voyage from "../components/Voyage";
 import { useLive, useLiveIndex } from "../components/useLiveIndex";
+import { G } from "../glyphs";
 
 export type CronRow = { t: "header"; label: string } | { t: "job"; job: CronJob };
 
@@ -65,7 +66,11 @@ export default function Crons({ onBack, onQuit }: Props) {
 
   // an agent may file a proposal while this screen is open
   useEffect(() => {
-    const t = setInterval(() => setJobs(loadJobs()), RELOAD_MS);
+    // same tasks, same state: keep the old array so nothing re-renders
+    const t = setInterval(() => {
+      const next = loadJobs();
+      setJobs((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
+    }, RELOAD_MS);
     return () => clearInterval(t);
   }, []);
 
@@ -171,7 +176,7 @@ export default function Crons({ onBack, onQuit }: Props) {
         const color = RUNTIME_COLOR[j.runtime] ?? theme.dim;
         return (
           <ItemRow key={j.id} hot={on}>
-            <Text color={on ? theme.highlightFg : color}>{`  ${RUNTIME_ICON[j.runtime] ?? "•"} `}</Text>
+            <Text color={on ? theme.highlightFg : color}>{`  ${RUNTIME_ICON[j.runtime] ?? G.bullet} `}</Text>
             <Text color={on ? theme.highlightFg : theme.text}>{fit(j.name, 24).padEnd(25)}</Text>
             <Text color={on ? theme.highlightFg : j.status === "pending" ? theme.amber : theme.dim}>
               {fit(when, Math.max(8, inner - 30))}

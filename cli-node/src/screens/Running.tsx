@@ -22,6 +22,7 @@ import { Dim, HintBar, MIN_LIST_ROWS, StatusLine, Title, voyageRowsFor } from ".
 import { useLive } from "../components/useLiveIndex";
 import { useTermSize } from "../components/useTermSize";
 import Voyage from "../components/Voyage";
+import { G } from "../glyphs";
 
 export type RunningTarget =
   | { kind: "session"; session: Session; tmux?: string }
@@ -129,7 +130,7 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach, on
   const dir = target.kind === "session" ? target.session.dir : target.convo.dir;
   const name =
     target.kind === "session" ? sessionDisplay(target.session) : convoDisplay(target.convo);
-  const icon = RUNTIME_ICON[runtime] ?? "•";
+  const icon = RUNTIME_ICON[runtime] ?? G.bullet;
   const iconColor = RUNTIME_COLOR[runtime] ?? theme.text;
 
   const variant: RunningVariant = {
@@ -313,13 +314,13 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach, on
       {ended ? (
         <Box marginBottom={1}>
           <Text color={theme.amber} wrap="truncate">
-            ⚠ a sessão encerrou sozinha antes de abrir — Enter abre agora, esc volta.
+            {G.warn} a sessão encerrou sozinha antes de abrir — Enter abre agora, esc volta.
           </Text>
         </Box>
       ) : tmux ? (
         <Box flexDirection="column" marginBottom={1}>
           <Text color={theme.amber} wrap="truncate">
-            ⚠ gerenciada pelo atlas no tmux — entrar e ler nunca interrompem o agente.
+            {G.warn} gerenciada pelo atlas no tmux — entrar e ler nunca interrompem o agente.
           </Text>
           {procs.length > 0 && (
             <Text wrap="truncate">
@@ -331,7 +332,7 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach, on
       ) : (
         <Box flexDirection="column" marginBottom={1}>
           <Text color={theme.amber} wrap="truncate">
-            ⚠ já está rodando em outro lugar — abrir de novo corromperia a sessão.
+            {G.warn} já está rodando em outro lugar — abrir de novo corromperia a sessão.
           </Text>
           <Text wrap="truncate">
             {procs.map((p) => `PID ${p.pid}${p.age ? ` · ${p.age}` : ""}`).join("   ")}
@@ -359,7 +360,7 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach, on
           <Dim>{`— log · linhas ${start + 1}–${start + visible.length} de ${peekLines.length} —`}</Dim>
           {visible.map((l, i) => (
             <Text key={start + i} wrap="truncate">
-              <Text dimColor>{l.role === "você" ? "você › " : "agente › "}</Text>
+              <Text dimColor>{l.role === "você" ? `você ${G.said} ` : `agente ${G.said} `}</Text>
               {l.text}
             </Text>
           ))}

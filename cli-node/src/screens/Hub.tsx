@@ -35,7 +35,9 @@ import {
   hasSession,
   killSession,
   listAtlasSessions,
+  listAtlasSessionsAsync,
   listTmuxPanes,
+  listTmuxPanesAsync,
   matchAtlasSession,
   matchAtlasSessionDeep,
   tmuxBaseName,
@@ -60,16 +62,15 @@ import KpiTitle, { hubKpis } from "../components/Kpis";
 import { loadJobs, nextRun, whenLabel } from "../cron";
 import { useLive, useLiveIndex } from "../components/useLiveIndex";
 import { useTermSize } from "../components/useTermSize";
-import { useSpinner } from "../components/useSpinner";
+import { Spin } from "../components/useSpinner";
 import {
   keysForAgents,
   pidsForKey,
   pidsForResume,
   resumeIdsForAgents,
-  runningKeys,
-  runningResumeIds,
   runtimeForCommand,
   scanAgents,
+  scanAgentsAsync,
   terminatePids,
 } from "../process";
 import type { Choice } from "../App";
@@ -83,8 +84,24 @@ import {
   type Migration,
 } from "../migrate";
 import type { RunningTarget } from "./Running";
+import { G } from "../glyphs";
 
 export const RECENT_LIMIT = 10;
+
+/** Conversations and totals the last Hub read, kept across Hub mounts in
+ *  one process (the TUI loop) once enabled; tests never enable it. */
+let nativeCache: { convos: NativeSession[]; totals: Record<Harness, number> } | null = null;
+let nativeCacheOn = false;
+
+export function enableNativeCache(): void {
+  nativeCacheOn = true;
+}
+
+function readNative(): { convos: NativeSession[]; totals: Record<Harness, number> } {
+  const n = { convos: loadNativeSessions(), totals: loadNativeTotals() };
+  if (nativeCacheOn) nativeCache = n;
+  return n;
+}
 
 /** Scheduled task counts and the next firing among the active ones. */
 function cronStats(): { active: number; pending: number; next: string | null } {
@@ -159,27 +176,25 @@ interface Props {
   onMigrate: (c: Choice) => MigrateResult;
 }
 
-function SessionContent({
+const SessionContent = React.memo(function SessionContent({
   s,
   hot,
   running,
-  spin,
   tmux,
 }: {
   s: Session;
   hot: boolean;
   running: boolean;
-  spin: string;
   tmux: boolean;
 }) {
   const fg = hot ? theme.highlightFg : theme.text;
-  const icon = RUNTIME_ICON[s.runtime] ?? "•";
+  const icon = RUNTIME_ICON[s.runtime] ?? G.bullet;
   const iconColor = hot ? theme.highlightFg : (RUNTIME_COLOR[s.runtime] ?? theme.text);
-  const missing = existsSync(s.dir) ? "" : " ⚠";
+  const missing = existsSync(s.dir) ? "" : ` ${G.warn}`;
   return (
     <Text>
       {running ? (
-        <Text color={hot ? theme.highlightFg : theme.live}>{`${spin} `}</Text>
+        <Spin color={hot ? theme.highlightFg : theme.live} />
       ) : (
         <Text>{`  `}</Text>
       )}
@@ -193,29 +208,27 @@ function SessionContent({
       )}
     </Text>
   );
-}
+});
 
-function ConvoContent({
+const ConvoContent = React.memo(function ConvoContent({
   c,
   hot,
   live,
-  spin,
   tmux,
 }: {
   c: NativeSession;
   hot: boolean;
   live: boolean;
-  spin: string;
   tmux: boolean;
 }) {
   const fg = hot ? theme.highlightFg : theme.text;
-  const icon = RUNTIME_ICON[c.harness] ?? "•";
+  const icon = RUNTIME_ICON[c.harness] ?? G.bullet;
   const iconColor = hot ? theme.highlightFg : (RUNTIME_COLOR[c.harness] ?? theme.text);
   const preview = c.preview ? `  “${c.preview.slice(0, 48)}”` : `  · ${c.id.slice(0, 8)}`;
   return (
     <Text>
       {live ? (
-        <Text color={hot ? theme.highlightFg : theme.live}>{`${spin} `}</Text>
+        <Spin color={hot ? theme.highlightFg : theme.live} />
       ) : (
         <Text>{`  `}</Text>
       )}
@@ -229,27 +242,25 @@ function ConvoContent({
       )}
     </Text>
   );
-}
+});
 
-function TmuxContent({
+const TmuxContent = React.memo(function TmuxContent({
   name,
   runtime,
   dir,
   hot,
-  spin,
 }: {
   name: string;
   runtime: string;
   dir: string;
   hot: boolean;
-  spin: string;
 }) {
   const fg = hot ? theme.highlightFg : theme.text;
-  const icon = RUNTIME_ICON[runtime] ?? "•";
+  const icon = RUNTIME_ICON[runtime] ?? G.bullet;
   const iconColor = hot ? theme.highlightFg : (RUNTIME_COLOR[runtime] ?? theme.text);
   return (
     <Text>
-      <Text color={hot ? theme.highlightFg : theme.live}>{`${spin} `}</Text>
+      <Spin color={hot ? theme.highlightFg : theme.live} />
       <Text color={hot ? theme.highlightFg : theme.peach}>{`${TMUX_MARK} `}</Text>
       <Text color={iconColor}>{`${icon} `}</Text>
       <Text color={fg}>{`${runtime.padEnd(6)} ${name}  `}</Text>
@@ -260,7 +271,7 @@ function TmuxContent({
       )}
     </Text>
   );
-}
+});
 
 function sameSet(a: Set<string>, b: Set<string>): boolean {
   return a.size === b.size && [...a].every((k) => b.has(k));
@@ -306,13 +317,22 @@ export default function Hub({
   onMigrate,
 }: Props) {
   const [sessions, setSessions] = useState<Session[]>(() => load());
-  const [convos] = useState<NativeSession[]>(() => loadNativeSessions());
+  // back from tmux, the Hub opens on the conversations it last read and
+  // refreshes them right after the first frame
+  const [fromCache] = useState(() => nativeCache !== null);
+  const [native, setNative] = useState(() => nativeCache ?? readNative());
+  const convos = native.convos;
+  useEffect(() => {
+    if (!fromCache) return;
+    const t = setTimeout(() => setNative(readNative()), 60);
+    return () => clearTimeout(t);
+  }, []);
   const [fullHarness, setFullHarness] = useState<Record<Harness, NativeSession[] | null>>(() => ({
     claude: null,
     codex: null,
     muse: null,
   }));
-  const [totals] = useState<Record<Harness, number>>(() => loadNativeTotals());
+  const totals = native.totals;
   const [expandedHarness, setExpandedHarness] = useState<Record<Harness, boolean>>(() => ({
     claude: false,
     codex: false,
@@ -326,34 +346,53 @@ export default function Hub({
   // live agents: snapshot at mount, then refresh so sessions started or
   // stopped while browsing pin/unpin without reopening (cheap /proc scan
   // plus one `tmux ls` for Atlas-managed sessions in any terminal)
-  const [running, setRunning] = useState(() => runningKeys());
-  const [liveResumes, setLiveResumes] = useState(() => runningResumeIds());
+  // one /proc walk and one pane listing feed every live index at mount
+  const [boot] = useState(() => {
+    const agents = scanAgents();
+    const panes = listTmuxPanes();
+    return { agents, panes, fallback: buildTmuxFallback(agents, panes) };
+  });
+  const [running, setRunning] = useState(() => keysForAgents(boot.agents));
+  const [liveResumes, setLiveResumes] = useState(() => resumeIdsForAgents(boot.agents));
   const [tmuxSessions, setTmuxSessions] = useState(() => listAtlasSessions());
-  const [tmuxPanes, setTmuxPanes] = useState(() => listTmuxPanes());
+  const [tmuxPanes, setTmuxPanes] = useState(() => boot.panes);
   const [cron, setCron] = useState(cronStats);
-  const [fallbackTmux, setFallbackTmux] = useState(() =>
-    buildTmuxFallback(scanAgents(), listTmuxPanes()),
-  );
+  const [fallbackTmux, setFallbackTmux] = useState(() => boot.fallback);
   useEffect(() => {
-    const t = setInterval(() => {
-      // one /proc walk feeds every live index (keys, resumes, tmux links)
-      const agents = scanAgents();
-      const nextRunning = keysForAgents(agents);
-      setRunning((prev) => (sameSet(nextRunning, prev) ? prev : nextRunning));
-      const nextResumes = resumeIdsForAgents(agents);
-      setLiveResumes((prev) => (sameSet(nextResumes, prev) ? prev : nextResumes));
-      const nextTmux = listAtlasSessions();
-      setTmuxSessions((prev) => (sameTmux(nextTmux, prev) ? prev : nextTmux));
-      const nextPanes = listTmuxPanes();
-      setTmuxPanes((prev) => (samePanes(nextPanes, prev) ? prev : nextPanes));
-      setCron((prev) => {
-        const next = cronStats();
-        return prev.active === next.active && prev.pending === next.pending && prev.next === next.next ? prev : next;
-      });
-      const nextFallback = buildTmuxFallback(agents, nextPanes);
-      setFallbackTmux((prev) => (sameFallback(nextFallback, prev) ? prev : nextFallback));
+    // the refresh reads /proc and asks tmux without blocking: a keypress
+    // arriving mid-refresh is handled at once, never after it
+    let busy = false;
+    let alive = true;
+    const t = setInterval(async () => {
+      if (busy) return;
+      busy = true;
+      try {
+        const [agents, nextTmux, nextPanes] = await Promise.all([
+          scanAgentsAsync(),
+          listAtlasSessionsAsync(),
+          listTmuxPanesAsync(),
+        ]);
+        if (!alive) return;
+        const nextRunning = keysForAgents(agents);
+        setRunning((prev) => (sameSet(nextRunning, prev) ? prev : nextRunning));
+        const nextResumes = resumeIdsForAgents(agents);
+        setLiveResumes((prev) => (sameSet(nextResumes, prev) ? prev : nextResumes));
+        setTmuxSessions((prev) => (sameTmux(nextTmux, prev) ? prev : nextTmux));
+        setTmuxPanes((prev) => (samePanes(nextPanes, prev) ? prev : nextPanes));
+        setCron((prev) => {
+          const next = cronStats();
+          return prev.active === next.active && prev.pending === next.pending && prev.next === next.next ? prev : next;
+        });
+        const nextFallback = buildTmuxFallback(agents, nextPanes);
+        setFallbackTmux((prev) => (sameFallback(nextFallback, prev) ? prev : nextFallback));
+      } finally {
+        busy = false;
+      }
     }, 2000);
-    return () => clearInterval(t);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
   }, []);
   const tmuxForSession = (s: Session): string | null =>
     matchAtlasSessionDeep(tmuxSessions, tmuxBaseName(s.dir, s.runtime)) ??
@@ -393,7 +432,6 @@ export default function Hub({
   // no tmux, no migration: the T hint only shows where it can work
   const [tmuxOk] = useState(() => tmuxUsable());
   const { columns, rows: termRows } = useTermSize();
-  const spin = useSpinner(running.size > 0 || liveResumes.size > 0 || tmuxSessions.size > 0);
   const isRunning = (s: Session): boolean =>
     running.has(`${s.dir}\0${s.runtime}`) || tmuxForSession(s) !== null;
   const isConvoLive = (c: NativeSession): boolean =>
@@ -593,7 +631,7 @@ export default function Hub({
       .sort((a, b) => b.updatedAt - a.updatedAt);
     const nowCount = liveSessions.length + liveConvos.length;
     if (nowCount > 0) {
-      out.push({ t: "header", label: `◉ agora  ·  ${nowCount}` });
+      out.push({ t: "header", label: `${G.live} agora  ·  ${nowCount}` });
       for (const s of liveSessions) out.push({ t: "session", session: s });
       for (const c of liveConvos) out.push({ t: "convo", convo: c });
     }
@@ -680,7 +718,7 @@ export default function Hub({
       : strays;
     if (matchingStrays.length > 0) {
       const n = matchingStrays.length;
-      out.push({ t: "header", label: `◈ sessões tmux  ·  ${n} ${n === 1 ? "sessão" : "sessões"}` });
+      out.push({ t: "header", label: `${G.runtime.muse} sessões tmux  ·  ${n} ${n === 1 ? "sessão" : "sessões"}` });
       for (const s of matchingStrays) out.push({ t: "tmux", name: s.name, runtime: s.runtime, dir: s.dir });
     }
     for (const d of domains) out.push({ t: "domain", domain: d.domain, repos: d.repos });
@@ -698,23 +736,23 @@ export default function Hub({
 
   const toggleRecentsLabel = (): string => {
     const total = sessions.length;
-    if (!showRecents) return total === 0 ? "▸ Recentes · nenhuma" : `▸ Recentes · ${total}`;
+    if (!showRecents) return total === 0 ? `${G.collapsed} Recentes · nenhuma` : `${G.collapsed} Recentes · ${total}`;
     if (filtering) {
       const n = sessions.filter((s) => matchSession(s, query)).length;
-      return `▾ Recentes · ${n} ${n === 1 ? "resultado" : "resultados"}`;
+      return `${G.expanded} Recentes · ${n} ${n === 1 ? "resultado" : "resultados"}`;
     }
-    return total <= RECENT_LIMIT ? `▾ Recentes · ${total}` : `▾ Recentes · ${RECENT_LIMIT} de ${total}`;
+    return total <= RECENT_LIMIT ? `${G.expanded} Recentes · ${total}` : `${G.expanded} Recentes · ${RECENT_LIMIT} de ${total}`;
   };
 
   const toggleConvosLabel = (): string => {
     const total = totals.claude + totals.codex + totals.muse;
-    if (!showConvos) return total === 0 ? "▸ Conversas · nenhuma" : `▸ Conversas · ${total}`;
+    if (!showConvos) return total === 0 ? `${G.collapsed} Conversas · nenhuma` : `${G.collapsed} Conversas · ${total}`;
     if (filtering) {
       // same universe the section lists: loaded history, /tmp visibility
       const n = effectiveConvos.filter((c) => matchConvo(c, query) && convoVisible(c)).length;
-      return `▾ Conversas · ${n} ${n === 1 ? "resultado" : "resultados"}`;
+      return `${G.expanded} Conversas · ${n} ${n === 1 ? "resultado" : "resultados"}`;
     }
-    return `▾ Conversas · ${total}`;
+    return `${G.expanded} Conversas · ${total}`;
   };
 
   const activate = (at: number | null) => {
@@ -853,8 +891,8 @@ export default function Hub({
       if (input === "r") {
         const next = cycleRuntime(at.session.runtime);
         rekeyRuntime(at.session.dir, at.session.runtime, next);
-        at.session.runtime = next;
-        setSessions([...sessions]);
+        // a new object, not a mutation: rows are memoized by identity
+        setSessions(sessions.map((x) => (x === at.session ? { ...x, runtime: next } : x)));
       } else {
         if (isRunning(at.session)) {
           setMsg("sessão em execução — X encerra antes de remover do histórico.");
@@ -929,7 +967,7 @@ export default function Hub({
 
   const renderHeader = (label: string, at: number) => {
     const icon = label[0];
-    const colored = ["⬢", "✳", "◈", "▸", "◉"].includes(icon);
+    const colored = [...Object.values(G.runtime), G.live, G.collapsed, G.expanded].includes(icon);
     return (
       <HeaderRow key={at}>
         {colored ? (
@@ -953,7 +991,6 @@ export default function Hub({
     tmux: tmuxSessions.size,
     cron,
     sessions: sessions.length,
-    conversations: totals.claude + totals.codex + totals.muse,
   });
 
   return (
@@ -1013,7 +1050,7 @@ export default function Hub({
         if (row.t === "domain") {
           return (
             <ItemRow key={at} hot={hot}>
-              <Text color={hot ? theme.highlightFg : theme.peach}>{"  ◆ "}</Text>
+              <Text color={hot ? theme.highlightFg : theme.peach}>{`  ${G.domain} `}</Text>
               <Text color={hot ? theme.highlightFg : theme.text}>{row.domain}</Text>
               {hot ? (
                 <Text color="#3A2A1A">{`  ·  ${row.repos} ${row.repos === 1 ? "repo" : "repos"}`}</Text>
@@ -1030,7 +1067,6 @@ export default function Hub({
                 c={row.convo}
                 hot={hot}
                 live={isConvoLive(row.convo)}
-                spin={spin}
                 tmux={tmuxForConvo(row.convo) !== null}
               />
             </ItemRow>
@@ -1039,7 +1075,7 @@ export default function Hub({
         if (row.t === "tmux") {
           return (
             <ItemRow key={at} hot={hot}>
-              <TmuxContent name={row.name} runtime={row.runtime} dir={row.dir} hot={hot} spin={spin} />
+              <TmuxContent name={row.name} runtime={row.runtime} dir={row.dir} hot={hot} />
             </ItemRow>
           );
         }
@@ -1049,7 +1085,6 @@ export default function Hub({
               s={row.session}
               hot={hot}
               running={isRunning(row.session)}
-              spin={spin}
               tmux={tmuxForSession(row.session) !== null}
             />
           </ItemRow>

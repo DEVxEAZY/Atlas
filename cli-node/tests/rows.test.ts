@@ -133,7 +133,7 @@ describe("rows", () => {
       [mk("codex", "c1", 3), mk("claude", "a1", 2), mk("claude", "a2", 1)],
       1,
     );
-    expect(rows[0]).toEqual({ t: "header", label: "✳ Claude  ·  1 de 2" });
+    expect(rows[0]).toEqual({ t: "header", label: "✳\uFE0E Claude  ·  1 de 2" });
     expect(rows[1]).toEqual({ t: "convo", convo: expect.objectContaining({ id: "a1" }) });
     expect(rows[2]).toEqual({ t: "header", label: "⬢ Codex  ·  1" });
     expect(rows[3]).toEqual({ t: "convo", convo: expect.objectContaining({ id: "c1" }) });

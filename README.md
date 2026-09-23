@@ -188,6 +188,10 @@ you attach. `ATLAS_TMUX_BIN` can override tmux discovery on `PATH` (set it
 empty to force direct launch); `ATLAS_NO_BOAT=1` hides the footer painting
 (a moonlit sky over the sea where the little boat `ོ𓂃𖠳𓂃` rides at anchor).
 
+`ATLAS_GLYPHS=safe` swaps Atlas's symbols for portable ones (ASCII plus
+the WGL4 symbols every Windows console font has), for terminals whose fonts
+lack them, such as some Git Bash or Windows setups.
+
 Atlas-created tmux sessions use
 `atlas-<dir>-<runtime>-<hash>[-r<resume>][-N]`. Foreign tmux sessions linked
 to a history row or live conversation mark that row `𖥠` instead of appearing

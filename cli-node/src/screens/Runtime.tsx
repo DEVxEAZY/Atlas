@@ -9,6 +9,7 @@ import { Dim, HeaderRow, HintBar, ItemRow, StatusLine, Title, voyageRowsFor } fr
 import { useTermSize } from "../components/useTermSize";
 import Voyage from "../components/Voyage";
 import { useLiveIndex } from "../components/useLiveIndex";
+import { G } from "../glyphs";
 
 type Row = { t: "header"; label: string } | { t: "item"; runtime: Runtime };
 
@@ -95,7 +96,7 @@ export default function Runtime({ dir, onPick, onBack, onQuit }: Props) {
           <ItemRow key={at} hot={hot}>
             <Text wrap="truncate">
               <Text color={hot ? theme.highlightFg : ok ? theme.peach : theme.dim}>
-                {`  ${ok ? "✓" : "✗"} ${row.runtime.label.padEnd(8)} `}
+                {`  ${ok ? G.ok : G.bad} ${row.runtime.label.padEnd(8)} `}
               </Text>
               {hot ? (
                 <Text color="#3A2A1A">{fit(`(${detail(row.runtime)})`, inner - 14)}</Text>

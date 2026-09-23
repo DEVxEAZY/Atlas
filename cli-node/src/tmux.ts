@@ -160,6 +160,38 @@ export function listTmuxPanes(): TmuxPane[] {
   }
 }
 
+/** Run a tmux query without blocking; null on a missing binary or failure. */
+async function tmuxQuery(args: string[]): Promise<string | null> {
+  const bin = tmuxBin();
+  if (!bin) return null;
+  try {
+    const proc = Bun.spawn([bin, ...args], { env: liveEnv(), stdout: "pipe", stderr: "ignore" });
+    const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+    return code === 0 ? out : null;
+  } catch {
+    return null;
+  }
+}
+
+/** listTmuxPanes without blocking (the Hub's background refresh). */
+export async function listTmuxPanesAsync(): Promise<TmuxPane[]> {
+  const out = await tmuxQuery([
+    "list-panes",
+    "-a",
+    "-F",
+    "#{session_name}\t#{pane_current_command}\t#{pane_current_path}\t#{pane_tty}",
+  ]);
+  return out === null ? [] : parseTmuxPanes(out);
+}
+
+/** listAtlasSessions without blocking (the Hub's background refresh). */
+export async function listAtlasSessionsAsync(): Promise<Map<string, TmuxSession>> {
+  const map = new Map<string, TmuxSession>();
+  const out = await tmuxQuery(["ls", "-F", "#{session_name}\t#{session_attached}\t#{session_created}"]);
+  if (out !== null) for (const s of parseTmuxLs(out)) map.set(s.name, s);
+  return map;
+}
+
 export interface DetachedLaunch {
   ok: boolean;
   name?: string;
