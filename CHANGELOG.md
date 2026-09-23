@@ -4,7 +4,23 @@ All notable changes to Atlas are documented in this file.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-23
+
+- The boat sails again by default (`A` anchors it, and the choice is kept),
+  and calmer: one column every 400 ms, about 25 s across the strip. The
+  animation clock no longer speeds up while sailing; it stays at 5 fps.
+- Wave effects with clean transitions: the sea is a continuous gradient
+  from deep blue through blue to foam instead of four fixed colours, so
+  every wave brightens and fades through the shades in between. A sailing
+  boat trails a wake of foam that breathes with the swell and fades out
+  behind the stern, and pushes a light bow wave; at anchor a slow ripple
+  laps both sides of the hull. The ship's own little waves catch the light
+  of the water under them, the moon's glint follows the swell, and stars
+  brighten and fade over a few frames instead of blinking.
+
 ## [0.6.0] - 2026-09-23
+
+Tagged on GitHub only; its changes reach npm in 0.7.0.
 
 - A second, sparser row of stars joins the footer sky from 28 terminal rows
   when all three footer rows fit.

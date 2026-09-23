@@ -1121,18 +1121,18 @@ describe("tui", () => {
     }
   });
 
-  test("A sets the boat sailing and back to anchor, and remembers it", async () => {
+  test("A anchors the sailing boat and sets it sailing again, and remembers it", async () => {
     setupEnv();
     const app = mount(<App onDone={() => {}} />);
     try {
       await waitFrame(app, (f) => f.includes("Recentes"));
-      expect(getSettings().sail).toBe(false);
+      const start = getSettings().sail;
       await key(app, "A");
-      await waitFrame(app, (f) => f.includes("Barco navegando"));
-      expect(loadSettings().sail).toBe(true);
+      await waitFrame(app, (f) => f.includes(start ? "Barco ancorado" : "Barco navegando"));
+      expect(loadSettings().sail).toBe(!start);
       await key(app, "A");
-      await waitFrame(app, (f) => f.includes("Barco ancorado"));
-      expect(loadSettings().sail).toBe(false);
+      await waitFrame(app, (f) => f.includes(start ? "Barco navegando" : "Barco ancorado"));
+      expect(loadSettings().sail).toBe(start);
     } finally {
       app.unmount();
     }

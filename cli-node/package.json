@@ -1,6 +1,6 @@
 {
   "name": "atlas-cli",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Find, preview, and re-enter your Codex, Claude, Muse, and shell sessions from one terminal hub, backed by tmux.",
   "private": true,
   "license": "MIT",

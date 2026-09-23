@@ -11,17 +11,17 @@
  *  - Boat: a little sailboat with a gull between two waves (ོ𓂃𖠳𓂃, or
  *    `v~\_|_/~` with portable glyphs) rides at anchor near the right edge,
  *    balancing the moon on the left. With the sail setting on (A in the
- *    Hub) it sails instead: one column every frame, wrapping around the
+ *    Hub) it sails instead: one column every 400 ms, wrapping around the
  *    strip, so it leaves on the right as its bow comes back on the left.
  *
  *  Owns its tick state, so only this component re-renders each step, never
  *  the screen above it. */
-import React, { useEffect } from "react";
+import React from "react";
 import { Box, Text } from "ink";
 import { theme } from "../theme";
 import { G, type Glyphs } from "../glyphs";
 import { useTermSize } from "./useTermSize";
-import { FRAME_MS, setFramePeriod, useFrame } from "./clock";
+import { FRAME_MS, useFrame } from "./clock";
 import { useSettings } from "../settings";
 
 /** The rich motif: gull (U+0F7C, a combining mark: 0 columns), wave,
@@ -38,9 +38,9 @@ export const VOYAGE_MAX_WIDTH = 64;
 /** Frame period: the light on the water changes every frame of the shared
  *  clock (spinners tick on the same frames). */
 export const VOYAGE_TICK_MS = FRAME_MS;
-/** Frame period while the boat sails: one column every 125 ms reads as a
- *  steady glide rather than steps. The sea keeps its own pace. */
-export const SAIL_FRAME_MS = 125;
+/** Frames per column while the boat sails: one column every 400 ms, a
+ *  calm drift about 25 s across a full-width strip. */
+export const SAIL_EVERY = 2;
 
 export type Tone =
   | "gull"
@@ -55,12 +55,54 @@ export type Tone =
   | "star"
   | "starLit"
   | "glint"
-  | "glintSoft";
+  | "glintSoft"
+  | "wake";
 
 export interface Cell {
   /** One terminal column (the gull cell is a space plus its combining mark). */
   ch: string;
   tone: Tone;
+  /** Exact colour, when it is a blend rather than the tone's own colour. */
+  color?: string;
+}
+
+// ---- colour blending: every change on the water is a gradient, never a jump
+
+function rgb(hex: string): [number, number, number] {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+/** `a` blended toward `b` by t in [0, 1], quantised to 1/16 so that
+ *  neighbouring cells share colours and merge into few styled runs. */
+export function mix(a: string, b: string, t: number): string {
+  const q = Math.round(Math.min(1, Math.max(0, t)) * 16) / 16;
+  const [ar, ag, ab] = rgb(a);
+  const [br, bg, bb] = rgb(b);
+  const c = (x: number, y: number) => Math.round(x + (y - x) * q).toString(16).padStart(2, "0");
+  return `#${c(ar, br)}${c(ag, bg)}${c(ab, bb)}`.toUpperCase();
+}
+
+/** Deep water to foam, by position in [0, 1]. */
+const SEA_STOPS: Array<[number, string]> = [
+  [0, theme.seaDeep],
+  [0.45, theme.sea],
+  [0.8, theme.seaCrest],
+  [1, theme.text],
+];
+
+/** The colour of water at height h in [-1, 1]: a continuous gradient, so a
+ *  wave brightens and fades through every shade in between. */
+export function seaColor(h: number): string {
+  const p = Math.min(1, Math.max(0, (h + 1) / 2));
+  for (let i = 1; i < SEA_STOPS.length; i++) {
+    const [p1, c1] = SEA_STOPS[i];
+    if (p <= p1) {
+      const [p0, c0] = SEA_STOPS[i - 1];
+      return mix(c0, c1, (p - p0) / (p1 - p0));
+    }
+  }
+  return theme.text;
 }
 
 export const TONE_COLOR: Record<Tone, string> = {
@@ -77,6 +119,7 @@ export const TONE_COLOR: Record<Tone, string> = {
   starLit: theme.starLit,
   glint: theme.moon,
   glintSoft: theme.glint,
+  wake: theme.text,
 };
 
 /** Swell phase per frame, tuned for the shared clock's frame period. */
@@ -125,7 +168,8 @@ const STAR_DENSITY = 0.11;
 /** Frames between a star's twinkles, and how many frames each one lasts. */
 const TWINKLE_MIN = 16;
 const TWINKLE_SPAN = 22;
-const TWINKLE_LEN = 2;
+/** Frames a twinkle takes to brighten and as many to fade. */
+const TWINKLE_RAMP = 3;
 
 /** The lower star row is sparser: depth, not a second copy of the first. */
 const LOW_STAR_DENSITY = 0.07;
@@ -146,52 +190,80 @@ export function skyCells(width: number, tick: number, g: Glyphs = G, layer = 0):
     const ch = stars[Math.floor(grain(x, salt + 1) * stars.length)];
     const period = TWINKLE_MIN + Math.floor(grain(x, salt + 2) * TWINKLE_SPAN);
     const phase = Math.floor(grain(x, salt + 3) * period);
-    const lit = ch === stars[stars.length - 1] || (((tick + phase) % period) + period) % period < TWINKLE_LEN;
-    return { ch, tone: lit ? "starLit" : "star" };
+    // a twinkle ramps up and back down over a few frames, never a blink
+    const at = (((tick + phase) % period) + period) % period;
+    const glow = ch === stars[stars.length - 1] ? 1 : Math.max(0, 1 - Math.abs(at - TWINKLE_RAMP) / TWINKLE_RAMP);
+    if (glow <= 0) return { ch, tone: "star" };
+    return { ch, tone: glow > 0.5 ? "starLit" : "star", color: mix(theme.star, theme.starLit, glow) };
   });
 }
 
 /** The sea row at frame `tick` for a strip `width` columns wide: exactly
  *  `width` cells, or null when too narrow. Glyphs never change between
  *  frames; only their colours do. */
-/** Column of the ship's first cell while sailing: one column per frame,
- *  from the left edge, wrapping around a strip `width` wide. */
+/** Column of the ship's first cell while sailing: one column every
+ *  SAIL_EVERY frames from the left edge, wrapping around a strip `width`
+ *  wide. */
 export function sailAt(width: number, tick: number): number {
   const w = Math.floor(width);
-  return ((tick % w) + w) % w;
-}
-
-/** Sea and sky time for frame `tick`: in frames of the resting clock, so
- *  the water flows at one pace whether the boat sails or not. */
-export function seaTime(tick: number, sail: boolean): number {
-  return sail ? (tick * SAIL_FRAME_MS) / FRAME_MS : tick;
+  const step = Math.floor(tick / SAIL_EVERY);
+  return ((step % w) + w) % w;
 }
 
 export function voyageCells(width: number, tick: number, g: Glyphs = G, sail = false): Cell[] | null {
   const w = Math.floor(width);
   if (!(w >= VOYAGE_MIN_WIDTH)) return null;
   const boatTick = tick;
-  tick = seaTime(tick, sail);
-  const cells = Array.from({ length: w }, (_, x): Cell => ({ ch: seaGlyph(x), tone: seaTone(x, tick) }));
+  const cells = Array.from({ length: w }, (_, x): Cell => ({
+    ch: seaGlyph(x),
+    tone: seaTone(x, tick),
+    color: seaColor(swell(x, tick)),
+  }));
   // the moon's path on the water: brightest right under it, shimmering
   // with the swell, fading at the edges
   for (let x = 0; x <= MOON_COL + 2; x++) {
     const near = Math.abs(x - MOON_COL) <= 1;
-    cells[x].tone = near && swell(x, tick) > -0.2 ? "glint" : "glintSoft";
+    const lift = (swell(x, tick) + 1) / 2;
+    cells[x].tone = near && lift > 0.4 ? "glint" : "glintSoft";
+    cells[x].color = mix(seaColor(swell(x, tick)), theme.moon, (near ? 0.55 : 0.3) + 0.35 * lift);
   }
+  const n = g.ship.length;
   const at = sail ? sailAt(w, boatTick) : shipAt(w, g);
-  // wrapping: the stern still on the right while the bow is back on the left
-  g.ship.forEach((c, i) => (cells[(at + i) % w] = { ...c }));
+  const foam = (x: number, strength: number) => {
+    const c = cells[((x % w) + w) % w];
+    c.tone = "wake";
+    c.color = mix(c.color ?? TONE_COLOR[c.tone], theme.text, strength);
+  };
+  if (sail) {
+    // a wake of foam trailing the stern, breathing with the swell and
+    // fading out; a light bow wave just ahead of her
+    const WAKE = [0.75, 0.5, 0.32, 0.18, 0.08];
+    WAKE.forEach((s, d) => foam(at - 1 - d, s * (0.8 + 0.2 * Math.sin(boatTick * 0.7 - d))));
+    foam(at + n, 0.3);
+  } else {
+    // at anchor, a slow ripple against the hull on both sides
+    const r = 0.12 + 0.12 * Math.sin(tick * 0.5);
+    foam(at - 1, r);
+    foam(at + n, r);
+  }
+  // the ship itself; her little waves catch the light of the water under her
+  g.ship.forEach((c, i) => {
+    const x = (at + i) % w;
+    const cell: Cell = { ...c };
+    if (c.tone === "wave") cell.color = mix(theme.seaCrest, theme.text, 0.25 + 0.3 * ((swell(x, tick) + 1) / 2));
+    cells[x] = cell;
+  });
   return cells;
 }
 
-/** Adjacent cells of one tone merged into styled runs (fewer escape codes). */
-export function runs(cells: Cell[]): { text: string; tone: Tone }[] {
-  const out: { text: string; tone: Tone }[] = [];
+/** Adjacent cells of one colour merged into styled runs (fewer escape codes). */
+export function runs(cells: Cell[]): { text: string; color: string }[] {
+  const out: { text: string; color: string }[] = [];
   for (const c of cells) {
+    const color = c.color ?? TONE_COLOR[c.tone];
     const last = out[out.length - 1];
-    if (last && last.tone === c.tone) last.text += c.ch;
-    else out.push({ text: c.ch, tone: c.tone });
+    if (last && last.color === color) last.text += c.ch;
+    else out.push({ text: c.ch, color });
   }
   return out;
 }
@@ -200,7 +272,7 @@ function Row({ cells }: { cells: Cell[] }) {
   return (
     <Text wrap="truncate">
       {runs(cells).map((r, i) => (
-        <Text key={i} color={TONE_COLOR[r.tone]}>
+        <Text key={i} color={r.color}>
           {r.text}
         </Text>
       ))}
@@ -215,15 +287,13 @@ export default function Voyage({ rows }: { rows: number }) {
   const show = rows > 0;
   const tick = useFrame(show);
   const { sail } = useSettings();
-  useEffect(() => setFramePeriod(sail ? SAIL_FRAME_MS : FRAME_MS), [sail]);
   const { columns } = useTermSize();
   // root padding takes 4 columns
   const width = Math.min(VOYAGE_MAX_WIDTH, columns - 4);
   const sea = show ? voyageCells(width, tick, G, sail) : null;
   if (!sea) return null;
-  const skyTick = Math.floor(seaTime(tick, sail));
-  const sky = rows >= 2 ? skyCells(width, skyTick) : null;
-  const low = rows >= 3 ? skyCells(width, skyTick, G, 1) : null;
+  const sky = rows >= 2 ? skyCells(width, tick) : null;
+  const low = rows >= 3 ? skyCells(width, tick, G, 1) : null;
   return (
     <Box flexDirection="column">
       {sky && <Row cells={sky} />}

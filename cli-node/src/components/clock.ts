@@ -13,7 +13,6 @@ export const INPUT_HOLD_MS = 350;
 let frame = 0;
 let timer: ReturnType<typeof setInterval> | undefined;
 let holdUntil = 0;
-let period = FRAME_MS;
 
 function tick(): void {
   if (Date.now() < holdUntil) return;
@@ -21,20 +20,6 @@ function tick(): void {
   for (const s of subscribers) s(frame);
 }
 
-/** Change the frame period (e.g. faster while the boat sails); a running
- *  clock switches at once. */
-export function setFramePeriod(ms: number): void {
-  if (ms === period) return;
-  period = ms;
-  if (timer) {
-    clearInterval(timer);
-    timer = setInterval(tick, period);
-  }
-}
-
-export function framePeriod(): number {
-  return period;
-}
 
 /** Keys first: animations skip their frames for a moment after input, so
  *  every keypress gets a redraw of its own instead of queueing behind one. */
@@ -46,7 +31,7 @@ const subscribers = new Set<(n: number) => void>();
 function subscribe(fn: (n: number) => void): () => void {
   subscribers.add(fn);
   if (!timer) {
-    timer = setInterval(tick, period);
+    timer = setInterval(tick, FRAME_MS);
   }
   return () => {
     subscribers.delete(fn);

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { FRAME_MS } from "../src/components/clock";
 import {
   MIN_LIST_ROWS,
   SKY_MIN_ROWS,
@@ -16,8 +17,11 @@ import {
   VOYAGE_MIN_WIDTH,
   VOYAGE_MOTIF,
   VOYAGE_MOTIF_COLS,
+  mix,
   runs,
+  SAIL_EVERY,
   sailAt,
+  seaColor,
   shipAt,
   skyCells,
   voyageCells,
@@ -79,11 +83,11 @@ describe("voyage footer", () => {
     for (const tone of ["foam", "crest", "swell", "trough", "glint"]) expect(seen.has(tone as never)).toBe(true);
   });
 
-  test("runs merge same-tone cells and keep the text intact", () => {
+  test("runs merge same-colour cells and keep the text intact", () => {
     const cells = voyageCells(40, 17)!;
     const r = runs(cells);
     expect(r.map((x) => x.text).join("")).toBe(line(40, 17));
-    for (let i = 1; i < r.length; i++) expect(r[i].tone).not.toBe(r[i - 1].tone);
+    for (let i = 1; i < r.length; i++) expect(r[i].color).not.toBe(r[i - 1].color);
   });
 
   test("too narrow to sail draws nothing and never throws", () => {
@@ -124,15 +128,19 @@ describe("voyage footer", () => {
     for (let t = 1; t < 60; t++) expect(skyCells(w, t, undefined, 1)!.map((c) => c.ch).join("")).toBe(low.map((c) => c.ch).join(""));
   });
 
-  test("sailing: one column a frame, wrapping without a jump", () => {
+  test("sailing: a calm column every SAIL_EVERY frames, wrapping without a jump", () => {
     const w = 30;
-    for (let t = 1; t < 3 * w; t++) expect((sailAt(w, t) - sailAt(w, t - 1) + w) % w).toBe(1);
+    for (let t = 1; t < 3 * w * SAIL_EVERY; t++) {
+      const step = (sailAt(w, t) - sailAt(w, t - 1) + w) % w;
+      expect(step).toBe(t % SAIL_EVERY === 0 ? 1 : 0);
+    }
+    expect(SAIL_EVERY * FRAME_MS).toBeGreaterThanOrEqual(350); // slow: ~2.5 columns a second
     const shipCells = (t: number) => voyageCells(w, t, undefined, true)!.filter((c) => ["gull", "wave", "boat"].includes(c.tone));
     for (let t = 0; t < 2 * w; t++) {
       expect(voyageCells(w, t, undefined, true)).toHaveLength(w);
       expect(shipCells(t)).toHaveLength(4); // the whole ship, even across the edge
     }
-    const edge = voyageCells(w, w - 2, undefined, true)!; // gull at w-2: bow wraps to 0
+    const edge = voyageCells(w, (w - 2) * SAIL_EVERY, undefined, true)!; // gull at w-2: bow wraps to 0
     expect(edge[w - 2].tone).toBe("gull");
     expect(edge[0].tone).toBe("boat");
     // anchored by default
@@ -199,5 +207,46 @@ describe("hub chrome layout", () => {
     expect(hintsWidth(HINTS_SHORT) + 4).toBeLessThanOrEqual(50); // narrow screens
     expect(hintsWidth(HINTS_FILTER) + 4).toBeLessThanOrEqual(50);
     expect(HINTS_FULL_MIN_COLS).toBeLessThanOrEqual(80); // full hints on wide screens
+  });
+});
+
+describe("clean transitions on the water", () => {
+  test("sea colour is a gradient: a small change in height is a small change in colour", () => {
+    const lum = (hex: string) => {
+      const n = parseInt(hex.slice(1), 16);
+      return ((n >> 16) & 255) + ((n >> 8) & 255) + (n & 255);
+    };
+    let prev = lum(seaColor(-1));
+    for (let h = -1; h <= 1.0001; h += 0.05) {
+      const l = lum(seaColor(h));
+      expect(l).toBeGreaterThanOrEqual(prev); // brighter as it rises, never a dip
+      expect(l - prev).toBeLessThan(90); // no jump between neighbours
+      prev = l;
+    }
+    expect(mix("#000000", "#FFFFFF", 0.5)).toBe("#808080");
+  });
+
+  test("a sailing boat trails a fading wake and pushes a bow wave", () => {
+    const w = 40;
+    const t = 20;
+    const cells = voyageCells(w, t, undefined, true)!;
+    const at = sailAt(w, t);
+    const wake = [1, 2, 3, 4, 5].map((d) => cells[(at - d + w) % w]);
+    for (const c of wake) expect(c.tone).toBe("wake");
+    expect(cells[(at + 4) % w].tone).toBe("wake"); // bow wave
+    // the foam is strongest right behind the stern
+    const lum = (c: { color?: string }) => {
+      const n = parseInt(c.color!.slice(1), 16);
+      return ((n >> 16) & 255) + ((n >> 8) & 255) + (n & 255);
+    };
+    expect(lum(wake[0])).toBeGreaterThan(lum(wake[4]));
+  });
+
+  test("stars ramp up and fade instead of blinking", () => {
+    const w = 64;
+    const seen = new Set<string>();
+    for (let t = 0; t < 120; t++)
+      for (const c of skyCells(w, t)!) if (c.tone === "star" || c.tone === "starLit") seen.add(c.color ?? "rest");
+    expect(seen.size).toBeGreaterThan(3); // in-between shades, not just on and off
   });
 });

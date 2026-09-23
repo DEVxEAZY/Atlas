@@ -7,11 +7,12 @@ import { dirname, join } from "node:path";
 import { useSyncExternalStore } from "react";
 
 export interface Settings {
-  /** The footer boat sails across the sea (off: it rides at anchor). */
+  /** The footer boat sails across the sea (off: it rides at anchor). On by
+   *  default; A in the Hub toggles it. */
   sail: boolean;
 }
 
-export const DEFAULT_SETTINGS: Settings = { sail: false };
+export const DEFAULT_SETTINGS: Settings = { sail: true };
 
 export function settingsPath(): string {
   return process.env.ATLAS_SETTINGS_FILE ?? join(homedir(), ".local", "share", "atlas", "settings.json");
@@ -20,7 +21,7 @@ export function settingsPath(): string {
 export function loadSettings(path: string = settingsPath()): Settings {
   try {
     const raw = JSON.parse(readFileSync(path, "utf-8")) as Partial<Settings>;
-    return { ...DEFAULT_SETTINGS, sail: raw.sail === true };
+    return { ...DEFAULT_SETTINGS, sail: raw.sail !== false };
   } catch {
     return { ...DEFAULT_SETTINGS };
   }
