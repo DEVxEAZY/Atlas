@@ -30,13 +30,25 @@ export interface LaunchOpts {
   resume?: string;
   fresh?: boolean;
   attachTmux?: string;
+  /** Come back to Atlas afterwards: wait for the tmux client instead of
+   *  becoming it (the TUI loop). */
+  stay?: boolean;
+}
+
+/** A tmux handoff the TUI loop comes back from: the session it went to,
+ *  and whether Atlas was nested (it stayed behind in its own pane). */
+export interface Back {
+  back: string;
+  nested: boolean;
 }
 
 /** Hand the terminal to a tmux session: nested Atlas switches the current
  *  client (returns fast); otherwise this process BECOMES the attach-client
  *  via exec — same PID, group and terminal, so the kernel never sees an
- *  orphaned group to SIGHUP. Only returns when exec itself fails. */
-function handoff(plan: LaunchPlan): number {
+ *  orphaned group to SIGHUP. Only returns when exec itself fails.
+ *  With `stay`, Atlas instead waits for the client in the foreground (it
+ *  never exits first, so nothing is orphaned) and returns on detach. */
+function handoff(plan: LaunchPlan, stay = false): number | Back {
   // every attach heals mouse mode (wheel scroll, app mouse events),
   // including sessions created before Atlas set it
   if (plan.name) ensureMouse(plan.name);
@@ -52,7 +64,26 @@ function handoff(plan: LaunchPlan): number {
       console.error(`atlas: não consegui entrar na sessão ${plan.name}.`);
       return 2;
     }
-    return 0;
+    return stay ? { back: plan.name!, nested } : 0;
+  }
+  if (stay) {
+    let code = -1;
+    try {
+      code = Bun.spawnSync(plan.attachArgv!, {
+        env: liveEnv(),
+        stdin: "inherit",
+        stdout: "inherit",
+        stderr: "inherit",
+      }).exitCode;
+    } catch {
+      /* bad binary: handled below */
+    }
+    if (code !== 0 && !hasSession(plan.name!)) {
+      console.error(`atlas: não consegui entrar na sessão ${plan.name}.`);
+      return 2;
+    }
+    // detached, or the session ended: either way, back to the Hub
+    return { back: plan.name!, nested };
   }
   try {
     execArgv(plan.attachArgv![0], plan.attachArgv!);
@@ -81,6 +112,15 @@ export async function launch(
   runtime: string,
   opts: LaunchOpts = {},
 ): Promise<number> {
+  const r = await launchOrBack(target, runtime, opts);
+  return typeof r === "number" ? r : 0;
+}
+
+async function launchOrBack(
+  target: string,
+  runtime: string,
+  opts: LaunchOpts,
+): Promise<number | Back> {
   const directory = absDir(target);
   if (opts.attachTmux) {
     const name = opts.attachTmux;
@@ -100,7 +140,7 @@ export async function launch(
       console.log(attachArgv.join(" "));
       return 0;
     }
-    return handoff({ mode: "tmux-attach", name, createArgv: null, attachArgv, directArgv: null });
+    return handoff({ mode: "tmux-attach", name, createArgv: null, attachArgv, directArgv: null }, opts.stay);
   }
   if (!isDir(directory)) {
     console.error(`atlas: diretório não existe: ${directory}`);
@@ -163,7 +203,35 @@ export async function launch(
       }
     }
   }
-  return handoff(plan);
+  return handoff(plan, opts.stay);
+}
+
+/** What the Hub says on coming back from a tmux session. */
+export function backNotice(b: Back): string {
+  return b.nested
+    ? `${b.back} abriu no tmux · Ctrl-b L volta para cá.`
+    : `Voltou de ${b.back} · a sessão segue rodando no tmux.`;
+}
+
+/** The TUI as a loop: every tmux session opened from it comes back here on
+ *  detach (Ctrl-b d), or stays reachable with Ctrl-b L when nested. Leaves
+ *  on quit, on a launch outside tmux, or on an error. */
+async function tui(start?: Screen, dryRun = false): Promise<number> {
+  let notice: string | undefined;
+  for (;;) {
+    const choice = await pick(start, notice);
+    start = undefined;
+    if (!choice) return 0;
+    const r = await launchOrBack(choice.dir, choice.runtime, {
+      dryRun,
+      resume: choice.resume,
+      fresh: choice.fresh,
+      attachTmux: choice.attachTmux,
+      stay: !dryRun,
+    });
+    if (typeof r === "number") return r;
+    notice = backNotice(r);
+  }
 }
 
 export function listSessions(): number {
@@ -217,18 +285,12 @@ export async function here(target: string, opts: { dryRun?: boolean } = {}): Pro
   if (plan.kind === "attach")
     return launch(dir, plan.runtime, { dryRun: opts.dryRun, attachTmux: plan.name });
   if (plan.kind === "launch") return launch(dir, plan.runtime, { dryRun: opts.dryRun });
-  const choice = await pick(
+  return tui(
     plan.kind === "running"
       ? { name: "running", target: { kind: "session", session: plan.session } }
       : { name: "runtime", dir, fresh: false },
+    opts.dryRun,
   );
-  if (!choice) return 0;
-  return launch(choice.dir, choice.runtime, {
-    dryRun: opts.dryRun,
-    resume: choice.resume,
-    fresh: choice.fresh,
-    attachTmux: choice.attachTmux,
-  });
 }
 
 /** The TUI draws on the alternate screen (like vim/htop): the mouse wheel
@@ -238,11 +300,12 @@ export async function here(target: string, opts: { dryRun?: boolean } = {}): Pro
  *  animate at ~9 fps without repainting the whole screen each frame. */
 export const RENDER_OPTIONS = { alternateScreen: true, incrementalRendering: true } as const;
 
-async function pick(start?: Screen): Promise<Choice | null> {
+async function pick(start?: Screen, notice?: string): Promise<Choice | null> {
   let choice: Choice | null = null;
   const { waitUntilExit, unmount } = render(
     <App
       start={start}
+      notice={notice}
       onDone={(c) => {
         choice = c;
         unmount();
@@ -301,14 +364,7 @@ async function main(): Promise<number> {
     console.error("atlas: --runtime precisa de um diretório (atlas DIR --runtime R).");
     return 2;
   }
-  const choice = await pick();
-  if (!choice) return 0;
-  return launch(choice.dir, choice.runtime, {
-    dryRun: args.dryRun,
-    resume: choice.resume,
-    fresh: choice.fresh,
-    attachTmux: choice.attachTmux,
-  });
+  return tui(undefined, args.dryRun);
 }
 
 if (import.meta.main) {

@@ -4,6 +4,14 @@ All notable changes to Atlas are documented in this file.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-23
+
+- Sessions opened from the TUI come back to Atlas. Detaching (`Ctrl-b d`)
+  lands in the Hub with the session still running in tmux, ready to open
+  another one. Inside tmux, Atlas switches the client and stays in its own
+  pane: `Ctrl-b L` returns to it. `atlas DIR` without the TUI still hands
+  the terminal over and exits.
+
 - Scheduled tasks, shaped like Claude Code's `/schedule`: a prompt, a
   directory, a runtime (claude, codex or shell) and a schedule written as
   `todo dia 09:00`, `dias úteis 18:30`, `a cada 30 min` or a cron expression.

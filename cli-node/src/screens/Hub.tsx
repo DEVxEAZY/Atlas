@@ -135,6 +135,8 @@ interface Props {
   onNewSession: () => void;
   /** Scheduled tasks screen (C). */
   onCrons?: () => void;
+  /** Opening status line (back from tmux); pending tasks come after it. */
+  notice?: string;
   onDrill: (domain: string) => void;
   onQuit: () => void;
   /** Background relaunch into tmux (never attaches). */
@@ -282,6 +284,7 @@ export default function Hub({
   onViewRunning,
   onNewSession,
   onCrons,
+  notice,
   onDrill,
   onQuit,
   onMigrate,
@@ -354,6 +357,7 @@ export default function Hub({
   const [index, indexRef, setIndex] = useLiveIndex(0);
   // proposals filed by an agent only run once installed here: say so
   const [msg, setMsg] = useState(() => {
+    if (notice) return notice;
     const n = pendingCount();
     return n === 0 ? "" : `${n} ${n === 1 ? "tarefa agendada aguarda" : "tarefas agendadas aguardam"} confirmação — C para revisar.`;
   });

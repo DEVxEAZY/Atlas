@@ -30,9 +30,11 @@ interface Props {
   onDone: (c: Choice | null) => void;
   /** Open straight on this screen (`atlas DIR`); esc falls back to the Hub. */
   start?: Screen;
+  /** Status line the Hub opens with (e.g. back from a tmux session). */
+  notice?: string;
 }
 
-export default function App({ onDone: done, start }: Props) {
+export default function App({ onDone: done, start, notice }: Props) {
   // every exit (quit, launch, attach) waits for an in-flight migration: the
   // agent is already stopped, and leaving now would never resume it
   const onDone = (c: Choice | null) => {
@@ -107,6 +109,7 @@ export default function App({ onDone: done, start }: Props) {
       onViewRunning={(target) => push({ name: "running", target })}
       onNewSession={() => push({ name: "dir", title: "Nova sessão", domain: null })}
       onCrons={() => push({ name: "crons" })}
+      notice={notice}
       onDrill={(domain) => push({ name: "dir", title: domain, domain })}
       onQuit={() => onDone(null)}
       onMigrate={(c) => launchDetached(c.dir, c.runtime, c.resume)}

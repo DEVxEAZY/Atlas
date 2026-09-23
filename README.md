@@ -110,7 +110,13 @@ roots. The default roots are `~/@development` and `~/@megavale-repos`.
 | Leave a preview / quit Atlas | `Esc` / `Ctrl-c` |
 | End the selected running session | `X`, then `X` again to confirm |
 | Move a session or conversation into tmux, from the Hub or its management view | `T`, then `T` again |
-| Detach inside tmux without ending the session | `Ctrl-b`, then `d` (default tmux prefix) |
+| Back to Atlas from a tmux session, leaving it running | `Ctrl-b`, then `d` (default tmux prefix); `Ctrl-b L` when Atlas runs inside tmux |
+
+Sessions you open from the Atlas TUI come back to it. Detach with `Ctrl-b d`
+and you are back in the Hub while the session keeps running, so you can open
+another one. When Atlas itself runs inside tmux, it switches you to the
+session and stays in its own pane: `Ctrl-b L` returns to it. `atlas DIR`
+without the TUI still hands the terminal over and exits.
 
 For a deliberate second session in the same directory, use `n`. Opening a
 running row shows its management view. Ending a session stops its work;

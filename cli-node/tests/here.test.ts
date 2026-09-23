@@ -2,7 +2,7 @@ import { describe, expect, spyOn, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { RENDER_OPTIONS, here, launch, parseArgs, planHere } from "../src/main.tsx";
+import { RENDER_OPTIONS, backNotice, here, launch, parseArgs, planHere } from "../src/main.tsx";
 import type { Session } from "../src/history";
 import { tmuxBaseName, type TmuxSession } from "../src/tmux";
 import { fakeCalls, setupFakeTmux } from "./tmux-fake";
@@ -137,4 +137,11 @@ describe("atlas DIR", () => {
       err.mockRestore();
     }
   });
+});
+
+test("coming back from tmux tells how the session stays reachable", () => {
+  expect(backNotice({ back: "atlas-x-shell-1a2b3c", nested: false })).toBe(
+    "Voltou de atlas-x-shell-1a2b3c · a sessão segue rodando no tmux.",
+  );
+  expect(backNotice({ back: "atlas-x-shell-1a2b3c", nested: true })).toContain("Ctrl-b L");
 });
