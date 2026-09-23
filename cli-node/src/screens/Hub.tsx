@@ -51,12 +51,13 @@ import {
   ItemRow,
   StatusLine,
   hintsWidth,
-  Title,
-  hubBoat,
+  hubVoyageRows,
   listHeightFor,
 } from "../components/chrome";
 import Voyage from "../components/Voyage";
 import { pendingCount } from "./Crons";
+import KpiTitle, { hubKpis } from "../components/Kpis";
+import { loadJobs, nextRun, whenLabel } from "../cron";
 import { useLive, useLiveIndex } from "../components/useLiveIndex";
 import { useTermSize } from "../components/useTermSize";
 import { useSpinner } from "../components/useSpinner";
@@ -84,6 +85,21 @@ import {
 import type { RunningTarget } from "./Running";
 
 export const RECENT_LIMIT = 10;
+
+/** Scheduled task counts and the next firing among the active ones. */
+function cronStats(): { active: number; pending: number; next: string | null } {
+  const jobs = loadJobs();
+  const active = jobs.filter((j) => j.status === "active");
+  const soonest = active
+    .map((j) => nextRun(j.when))
+    .filter((d): d is Date => d !== null)
+    .sort((a, b) => a.getTime() - b.getTime())[0];
+  return {
+    active: active.length,
+    pending: jobs.length - active.length - jobs.filter((j) => j.status === "paused").length,
+    next: soonest ? whenLabel(soonest) : null,
+  };
+}
 
 /** Left-column width that fits the full filter hint (57 chars + "/ "). */
 export const FULL_HINT_MIN_LEFT = 59;
@@ -314,6 +330,7 @@ export default function Hub({
   const [liveResumes, setLiveResumes] = useState(() => runningResumeIds());
   const [tmuxSessions, setTmuxSessions] = useState(() => listAtlasSessions());
   const [tmuxPanes, setTmuxPanes] = useState(() => listTmuxPanes());
+  const [cron, setCron] = useState(cronStats);
   const [fallbackTmux, setFallbackTmux] = useState(() =>
     buildTmuxFallback(scanAgents(), listTmuxPanes()),
   );
@@ -329,6 +346,10 @@ export default function Hub({
       setTmuxSessions((prev) => (sameTmux(nextTmux, prev) ? prev : nextTmux));
       const nextPanes = listTmuxPanes();
       setTmuxPanes((prev) => (samePanes(nextPanes, prev) ? prev : nextPanes));
+      setCron((prev) => {
+        const next = cronStats();
+        return prev.active === next.active && prev.pending === next.pending && prev.next === next.next ? prev : next;
+      });
       const nextFallback = buildTmuxFallback(agents, nextPanes);
       setFallbackTmux((prev) => (sameFallback(nextFallback, prev) ? prev : nextFallback));
     }, 2000);
@@ -923,12 +944,21 @@ export default function Hub({
     );
   };
 
+  // everything alive right now, whatever the filter shows
+  const live: Record<string, number> = {};
+  for (const s of sessions) if (isRunning(s)) live[s.runtime] = (live[s.runtime] ?? 0) + 1;
+  for (const c of effectiveConvos) if (isConvoLive(c)) live[c.harness] = (live[c.harness] ?? 0) + 1;
+  const kpis = hubKpis({
+    live,
+    tmux: tmuxSessions.size,
+    cron,
+    sessions: sessions.length,
+    conversations: totals.claude + totals.codex + totals.muse,
+  });
+
   return (
     <Box flexDirection="column" paddingLeft={2} paddingRight={2}>
-      <Title>
-        {sessions.length === 1 ? "1 sessão" : `${sessions.length} sessões`}
-        {` · ${totals.claude + totals.codex + totals.muse} conversas`}
-      </Title>
+      <KpiTitle kpis={kpis} columns={columns} />
       <Box marginBottom={1}>
         <Text dimColor>/ </Text>
         <TextInput
@@ -1035,7 +1065,7 @@ export default function Hub({
               : HINTS_SHORT
         }
       />
-      <Voyage show={hubBoat(termRows)} />
+      <Voyage rows={hubVoyageRows(termRows)} />
     </Box>
   );
 }

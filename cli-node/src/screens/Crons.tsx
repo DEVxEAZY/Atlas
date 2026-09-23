@@ -18,7 +18,7 @@ import { STATUS_LABEL, installSkill } from "../cronCli";
 import { firstItemIndex, moveIndex, windowSlice } from "../rows";
 import { ago, fit, shorten } from "../util";
 import { theme, RUNTIME_COLOR, RUNTIME_ICON } from "../theme";
-import { Dim, HeaderRow, HintBar, ItemRow, StatusLine, Title, VOYAGE_ROWS, boatFits } from "../components/chrome";
+import { Dim, HeaderRow, HintBar, ItemRow, StatusLine, Title, voyageRowsFor } from "../components/chrome";
 import { useTermSize } from "../components/useTermSize";
 import Voyage from "../components/Voyage";
 import { useLive, useLiveIndex } from "../components/useLiveIndex";
@@ -139,8 +139,8 @@ export default function Crons({ onBack, onQuit }: Props) {
 
   // title 2 + detail 3 + status 1 + hints 2, plus 1 spare
   const CHROME = 9;
-  const boat = boatFits(termRows, CHROME + 3);
-  const listHeight = Math.max(3, termRows - CHROME - (boat ? VOYAGE_ROWS : 0));
+  const voyage = voyageRowsFor(termRows, CHROME + 3);
+  const listHeight = Math.max(3, termRows - CHROME - voyage);
   const [start, end] = windowSlice(rows.length, index, listHeight);
   const hot = index !== null ? rows[index] : undefined;
   const sel = hot?.t === "job" ? hot.job : null;
@@ -194,7 +194,7 @@ export default function Crons({ onBack, onQuit }: Props) {
                 : [["S", "instalar skill"], ["esc", "voltar"]]
         }
       />
-      <Voyage show={boat} />
+      <Voyage rows={voyage} />
     </Box>
   );
 }

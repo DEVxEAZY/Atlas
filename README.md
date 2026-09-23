@@ -185,8 +185,8 @@ Atlas discovers real directories, reads local history and native conversation
 stores, and launches installed runtimes. tmux owns persistent sessions;
 Atlas captures pane output for previews and hands the terminal to tmux when
 you attach. `ATLAS_TMUX_BIN` can override tmux discovery on `PATH` (set it
-empty to force direct launch); `ATLAS_NO_BOAT=1` hides the little boat
-(`ོ𓂃𖠳𓂃`) drifting across the footer.
+empty to force direct launch); `ATLAS_NO_BOAT=1` hides the footer painting
+(a moonlit sky over the sea where the little boat `ོ𓂃𖠳𓂃` rides at anchor).
 
 Atlas-created tmux sessions use
 `atlas-<dir>-<runtime>-<hash>[-r<resume>][-N]`. Foreign tmux sessions linked

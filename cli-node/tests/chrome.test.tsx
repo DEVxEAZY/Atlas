@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   MIN_LIST_ROWS,
+  SKY_MIN_ROWS,
   VOYAGE_MIN_ROWS,
   boatFits,
   chromeRows,
@@ -8,14 +9,16 @@ import {
   hubBoat,
   listHeightFor,
   voyageEnabled,
+  voyageRowsFor,
 } from "../src/components/chrome";
 import {
-  BOAT_EVERY,
+  MOON_COL,
   VOYAGE_MIN_WIDTH,
   VOYAGE_MOTIF,
   VOYAGE_MOTIF_COLS,
   runs,
   shipAt,
+  skyCells,
   voyageCells,
 } from "../src/components/Voyage";
 
@@ -42,8 +45,8 @@ describe("voyage footer", () => {
   });
 
   test("every frame is exactly the strip width, one row, the gull on a space", () => {
-    for (const w of [VOYAGE_MIN_WIDTH, 10, 30, 64]) {
-      for (let t = 0; t < 3 * w * BOAT_EVERY; t++) {
+    for (const w of [VOYAGE_MIN_WIDTH, 16, 30, 64]) {
+      for (let t = 0; t < 3 * w; t++) {
         const cells = voyageCells(w, t)!;
         expect(cells).toHaveLength(w);
         for (const c of cells) expect(stringWidth(c.ch)).toBe(1); // one column each
@@ -54,26 +57,25 @@ describe("voyage footer", () => {
     }
   });
 
-  test("it drifts one column every BOAT_EVERY frames and wraps without jumping", () => {
-    const w = 30;
-    const at = (t: number) => shipAt(w, t);
-    expect(at(0)).toBe(0);
-    expect(at(BOAT_EVERY - 1)).toBe(0);
-    expect(at(BOAT_EVERY)).toBe(1);
-    for (let t = 1; t < 3 * w * BOAT_EVERY; t++) {
-      const step = (at(t) - at(t - 1) + w) % w;
-      expect(step === 0 || step === 1).toBe(true); // never teleports
+  test("the boat rides at anchor near the right edge", () => {
+    for (const w of [VOYAGE_MIN_WIDTH, 30, 64]) {
+      for (let t = 0; t < 50; t++) {
+        const cells = voyageCells(w, t)!;
+        expect(cells[shipAt(w)].tone).toBe("gull");
+        expect(cells[shipAt(w) + 2].tone).toBe("boat");
+        expect(cells.slice(shipAt(w) + 4).every((c) => c.ch === "~" || c.ch === "-")).toBe(true); // open water after it
+      }
     }
-    // sailing off the right edge, the bow is already back on the left
-    const t = (w - 2) * BOAT_EVERY;
-    const cells = voyageCells(w, t)!;
-    expect(cells[w - 2].tone).toBe("gull");
-    expect(cells[0].tone).toBe("boat");
   });
 
-  test("the sea moves every frame, even while the boat holds its column", () => {
-    expect(shipAt(30, 0)).toBe(shipAt(30, 1));
-    expect(line(30, 0)).not.toBe(line(30, 1));
+  test("only light moves: glyphs stay, colours change, crests turn to foam", () => {
+    const w = 64;
+    const glyphs = (t: number) => line(w, t);
+    const tones = (t: number) => voyageCells(w, t)!.map((c) => c.tone).join();
+    for (let t = 1; t < 100; t++) expect(glyphs(t)).toBe(glyphs(0));
+    expect(tones(1)).not.toBe(tones(0));
+    const seen = new Set(Array.from({ length: 100 }, (_, t) => voyageCells(w, t)!.map((c) => c.tone)).flat());
+    for (const tone of ["foam", "crest", "swell", "trough", "glint"]) expect(seen.has(tone as never)).toBe(true);
   });
 
   test("runs merge same-tone cells and keep the text intact", () => {
@@ -85,7 +87,35 @@ describe("voyage footer", () => {
 
   test("too narrow to sail draws nothing and never throws", () => {
     for (const w of [0, 1, 3, VOYAGE_MIN_WIDTH - 1, NaN]) expect(voyageCells(w, 7)).toBeNull();
-    expect(voyageCells(10, -5)).toHaveLength(10);
+    expect(voyageCells(16, -5)).toHaveLength(16);
+  });
+
+  test("the sky is still: moon and stars keep their columns, only colours twinkle", () => {
+    for (const w of [VOYAGE_MIN_WIDTH, 30, 64]) {
+      const glyphs = (t: number) => skyCells(w, t)!.map((c) => c.ch).join("");
+      for (let t = 0; t < 200; t++) {
+        const cells = skyCells(w, t)!;
+        expect(cells).toHaveLength(w);
+        for (const c of cells) expect(stringWidth(c.ch)).toBe(1);
+        expect(glyphs(t)).toBe(glyphs(0));
+      }
+      const sky = skyCells(w, 0)!;
+      expect(sky[MOON_COL]).toEqual({ ch: "☾", tone: "moon" }); // top-left corner
+      expect(sky.filter((c) => c.tone === "moon")).toHaveLength(1);
+      // mostly empty sky: stars are sparse
+      expect(sky.filter((c) => c.tone === "star" || c.tone === "starLit").length).toBeLessThan(w / 4);
+    }
+    const tones = new Set(Array.from({ length: 80 }, (_, t) => skyCells(64, t)!.map((c) => c.tone).join()));
+    expect(tones.size).toBeGreaterThan(1); // something twinkles
+  });
+
+  test("the moon glints on the water right under it", () => {
+    const w = 64;
+    const m = MOON_COL;
+    const sea = voyageCells(w, 0)!;
+    expect(["glint", "glintSoft"]).toContain(sea[m].tone);
+    expect(sea[m].ch).not.toBe(" ");
+    expect(["glint", "glintSoft"]).not.toContain(sea[m + 3].tone);
   });
 
   test("ATLAS_NO_BOAT turns it off", () => {
@@ -96,15 +126,16 @@ describe("voyage footer", () => {
 });
 
 describe("hub chrome layout", () => {
-  test("chrome occupies 9 rows with the boat, 8 when it is docked", () => {
-    expect(chromeRows(24, ENV)).toBe(9); // header 4 + footer 3 + boat 1 + margin 1
+  test("chrome occupies 10 rows with sky and sea, 9 with the sea, 8 docked", () => {
+    expect(chromeRows(24, ENV)).toBe(10); // header 4 + footer 3 + sky 1 + sea 1 + margin 1
+    expect(chromeRows(SKY_MIN_ROWS - 1, ENV)).toBe(9); // no room for the sky
     expect(chromeRows(VOYAGE_MIN_ROWS - 1, ENV)).toBe(8);
     expect(chromeRows(40, { ATLAS_NO_BOAT: "1" })).toBe(8);
   });
 
   test("list takes what is left, with a 3-row floor", () => {
-    expect(listHeightFor(24, ENV)).toBe(15);
-    expect(listHeightFor(undefined, ENV)).toBe(15);
+    expect(listHeightFor(24, ENV)).toBe(14);
+    expect(listHeightFor(undefined, ENV)).toBe(14);
     expect(listHeightFor(13, ENV)).toBe(5); // short terminal: the boat's row goes to the list
     expect(listHeightFor(10, ENV)).toBe(MIN_LIST_ROWS);
   });
@@ -115,6 +146,14 @@ describe("hub chrome layout", () => {
     expect(boatFits(VOYAGE_MIN_ROWS - 1, 0, ENV)).toBe(false);
     expect(boatFits(40, 0, { ATLAS_NO_BOAT: "1" })).toBe(false);
     expect(hubBoat(VOYAGE_MIN_ROWS, ENV)).toBe(true);
+  });
+
+  test("the sky takes a row only where both rows fit", () => {
+    expect(voyageRowsFor(24, 22, ENV)).toBe(2);
+    expect(voyageRowsFor(24, 23, ENV)).toBe(1); // one spare row: sea only
+    expect(voyageRowsFor(SKY_MIN_ROWS - 1, 0, ENV)).toBe(1); // short terminal: sea only
+    expect(voyageRowsFor(24, 24, ENV)).toBe(0);
+    expect(voyageRowsFor(40, 0, { ATLAS_NO_BOAT: "1" })).toBe(0);
   });
 
   test("hint sets fit without wrapping", () => {

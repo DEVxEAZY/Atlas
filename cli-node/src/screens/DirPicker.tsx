@@ -12,7 +12,7 @@ import {
 } from "../rows";
 import { fit, shorten } from "../util";
 import { theme } from "../theme";
-import { Dim, HeaderRow, HintBar, ItemRow, Title, VOYAGE_ROWS, boatFits } from "../components/chrome";
+import { Dim, HeaderRow, HintBar, ItemRow, Title, voyageRowsFor } from "../components/chrome";
 import { useTermSize } from "../components/useTermSize";
 import Voyage from "../components/Voyage";
 import { useLiveIndex } from "../components/useLiveIndex";
@@ -58,8 +58,8 @@ export default function DirPicker({ title, candidates, onPick, onBack, onQuit }:
   const total = rows.filter((r) => r.t !== "header").length;
   // title 2 + filter 2 + hints 2, plus 3 spare rows (headers live in the list)
   const PICKER_CHROME = 9;
-  const boat = boatFits(termRows, PICKER_CHROME + 5);
-  const listHeight = Math.max(5, termRows - PICKER_CHROME - (boat ? VOYAGE_ROWS : 0));
+  const voyage = voyageRowsFor(termRows, PICKER_CHROME + 5);
+  const listHeight = Math.max(5, termRows - PICKER_CHROME - voyage);
   const [start, end] = windowSlice(rows.length, index, listHeight);
   const inner = Math.max(10, columns - 8);
 
@@ -112,7 +112,7 @@ export default function DirPicker({ title, candidates, onPick, onBack, onQuit }:
           ["esc", "voltar"],
         ]}
       />
-      <Voyage show={boat} />
+      <Voyage rows={voyage} />
     </Box>
   );
 }

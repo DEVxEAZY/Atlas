@@ -18,7 +18,7 @@ import { convoDisplay, sessionDisplay } from "../rows";
 import { RUNTIME_COLOR, RUNTIME_ICON, TMUX_MARK, theme } from "../theme";
 import { capturePane, hasSession, killSession, tmuxUsable } from "../tmux";
 import { ago, shorten } from "../util";
-import { Dim, HintBar, MIN_LIST_ROWS, StatusLine, Title, VOYAGE_ROWS, boatFits } from "../components/chrome";
+import { Dim, HintBar, MIN_LIST_ROWS, StatusLine, Title, voyageRowsFor } from "../components/chrome";
 import { useLive } from "../components/useLiveIndex";
 import { useTermSize } from "../components/useTermSize";
 import Voyage from "../components/Voyage";
@@ -76,11 +76,16 @@ function runningBase(v: RunningVariant): number {
 /** Whether this variant draws the boat: only when its row still fits
  *  over the minimum list at this height. */
 export function runningBoat(v: RunningVariant, rows: number, env: NodeJS.ProcessEnv = process.env): boolean {
-  return boatFits(rows, runningBase(v) + MIN_LIST_ROWS, env);
+  return runningVoyageRows(v, rows, env) > 0;
+}
+
+/** Footer painting rows this variant draws (see chrome.voyageRowsFor). */
+export function runningVoyageRows(v: RunningVariant, rows: number, env: NodeJS.ProcessEnv = process.env): number {
+  return voyageRowsFor(rows, runningBase(v) + MIN_LIST_ROWS, env);
 }
 
 export function runningChromeRows(v: RunningVariant, rows: number, env: NodeJS.ProcessEnv = process.env): number {
-  return runningBase(v) + (runningBoat(v, rows, env) ? VOYAGE_ROWS : 0);
+  return runningBase(v) + runningVoyageRows(v, rows, env);
 }
 
 export default function Running({ target, onBack, onQuit, onLaunch, onAttach, onMigrate }: Props) {
@@ -133,7 +138,7 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach, on
     tmux: tmux !== null,
     procs: procs.length,
   };
-  const boat = runningBoat(variant, rows);
+  const voyage = runningVoyageRows(variant, rows);
   const listHeight = Math.max(MIN_LIST_ROWS, rows - runningChromeRows(variant, rows));
   const totalLines = tmux ? tmuxLines.length : peekLines.length;
   const maxHidden = Math.max(0, totalLines - listHeight);
@@ -394,7 +399,7 @@ export default function Running({ target, onBack, onQuit, onLaunch, onAttach, on
                 ]
         }
       />
-      <Voyage show={boat} />
+      <Voyage rows={voyage} />
     </Box>
   );
 }

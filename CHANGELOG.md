@@ -4,6 +4,20 @@ All notable changes to Atlas are documented in this file.
 
 ## [Unreleased]
 
+- The Hub title is a KPI strip: agents running now (with a per-runtime
+  breakdown), Atlas tmux sessions, scheduled tasks waiting for confirmation,
+  active ones and the next run, then sessions and conversations. It stays on
+  the title row and refreshes with the live index every 2 s. On narrow
+  screens the least important KPIs drop from the right.
+
+- The footer is now a still night painting where only light moves: a sky
+  row with a crescent moon in the top-left corner and sparse stars that keep
+  their columns and only twinkle, over a sea whose glyphs never change while
+  two swells of colour travel across it, deep blue to white foam. The
+  moon glints on the water under it, and the boat rides at anchor near the
+  right edge. The sky is drawn from 24 terminal rows when both rows fit;
+  shorter screens keep the sea alone.
+
 ## [0.4.0] - 2026-09-23
 
 - Sessions opened from the TUI come back to Atlas. Detaching (`Ctrl-b d`)

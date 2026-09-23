@@ -78,10 +78,15 @@ export const DEFAULT_ROWS = 24;
  *  instead of overflowing. */
 export const MIN_LIST_ROWS = 3;
 
-/** Rows the sailing-boat footer (Voyage) draws under the hint bar. */
+/** Rows the footer painting (Voyage) draws under the hint bar at least:
+ *  the sea with the boat. */
 export const VOYAGE_ROWS = 1;
+/** Rows with the night sky over the sea. */
+export const VOYAGE_SKY_ROWS = 2;
 /** Below this many terminal rows the boat stays docked (not drawn). */
 export const VOYAGE_MIN_ROWS = 16;
+/** Below this many terminal rows the sky is left out. */
+export const SKY_MIN_ROWS = 24;
 
 /** Off when ATLAS_NO_BOAT is set (any non-empty value but "0"). */
 export function voyageEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -89,17 +94,30 @@ export function voyageEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return !v || v === "0";
 }
 
-/** Whether the boat fits under a screen whose other rows (chrome plus the
- *  minimum content it must show) take `fixedRows`. The boat animates, and an
- *  Ink frame taller than the terminal is fully cleared on every render — so
- *  it is drawn only where it can never push the frame past the window. */
+/** Rows the footer painting takes under a screen whose other rows (chrome
+ *  plus the minimum content it must show) take `fixedRows`: 2 (sky and
+ *  sea), 1 (sea only) or 0. It animates, and an Ink frame taller than the
+ *  terminal is fully cleared on every render, so it is drawn only where it
+ *  can never push the frame past the window. */
+export function voyageRowsFor(
+  rows: number | undefined,
+  fixedRows: number,
+  env: NodeJS.ProcessEnv = process.env,
+): number {
+  const r = rows || DEFAULT_ROWS;
+  if (!voyageEnabled(env) || r < VOYAGE_MIN_ROWS) return 0;
+  const spare = r - fixedRows;
+  if (r >= SKY_MIN_ROWS && spare >= VOYAGE_SKY_ROWS) return VOYAGE_SKY_ROWS;
+  return spare >= VOYAGE_ROWS ? VOYAGE_ROWS : 0;
+}
+
+/** Whether the boat fits at all (see voyageRowsFor). */
 export function boatFits(
   rows: number | undefined,
   fixedRows: number,
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
-  const r = rows || DEFAULT_ROWS;
-  return voyageEnabled(env) && r >= VOYAGE_MIN_ROWS && r - fixedRows >= VOYAGE_ROWS;
+  return voyageRowsFor(rows, fixedRows, env) > 0;
 }
 
 /** Hub chrome around the list, in rows: header is Title (1 + margin 1)
@@ -111,14 +129,19 @@ const FOOTER_ROWS = 3;
 const CHROME_MARGIN = 1;
 const HUB_BASE = HEADER_ROWS + FOOTER_ROWS + CHROME_MARGIN;
 
+/** Footer painting rows the Hub draws at this terminal height. */
+export function hubVoyageRows(rows: number | undefined, env: NodeJS.ProcessEnv = process.env): number {
+  return voyageRowsFor(rows, HUB_BASE + MIN_LIST_ROWS, env);
+}
+
 /** Whether the Hub draws the boat at this terminal height. */
 export function hubBoat(rows: number | undefined, env: NodeJS.ProcessEnv = process.env): boolean {
-  return boatFits(rows, HUB_BASE + MIN_LIST_ROWS, env);
+  return hubVoyageRows(rows, env) > 0;
 }
 
 /** Non-list rows the Hub chrome occupies at this terminal height. */
 export function chromeRows(rows?: number, env: NodeJS.ProcessEnv = process.env): number {
-  return HUB_BASE + (hubBoat(rows, env) ? VOYAGE_ROWS : 0);
+  return HUB_BASE + hubVoyageRows(rows, env);
 }
 
 /** Visible list rows (never overflows rows). */

@@ -1,11 +1,19 @@
-/** Footer mascot: a little sailboat with a gull between two waves
- *  (ོ𓂃𖠳𓂃) sailing a one-row sea, an endless "loading" loop. The sea swells
- *  every tick while the boat moves one column every BOAT_EVERY ticks, and it
- *  wraps around the strip: it sails off the right edge while its bow comes
- *  back in on the left, never jumping. Owns its tick state, so only this
- *  component re-renders each step — never the screen above it. */
+/** Footer painting: a still night scene in two rows, where only light moves.
+ *
+ *  - Sky: a crescent moon in the top-left corner and sparse stars on fixed
+ *    columns, mostly empty space. Stars only twinkle, by colour, each on its
+ *    own slow period. The sky row is drawn only when the screen has room.
+ *  - Sea: every column keeps its glyph; what moves is colour. Two swells of
+ *    different length travel across it, lifting each wave from deep blue
+ *    through blue to white foam at the crests, and the moon's reflection
+ *    glints on the water under it.
+ *  - Boat: a little sailboat with a gull between two waves (ོ𓂃𖠳𓂃) rides at
+ *    anchor near the right edge, balancing the moon on the left.
+ *
+ *  Owns its tick state, so only this component re-renders each step, never
+ *  the screen above it. */
 import React, { useEffect, useState } from "react";
-import { Text } from "ink";
+import { Box, Text } from "ink";
 import { theme } from "../theme";
 import { useTermSize } from "./useTermSize";
 
@@ -15,15 +23,28 @@ export const VOYAGE_MOTIF = "ོ𓂃𖠳𓂃";
 export const VOYAGE_MOTIF_COLS = 3;
 /** Cells the motif claims on the strip: the gull's space plus its 3 columns. */
 export const VOYAGE_SHIP_CELLS = VOYAGE_MOTIF_COLS + 1;
-/** Narrower strips draw nothing: the boat needs some sea around it. */
-export const VOYAGE_MIN_WIDTH = VOYAGE_SHIP_CELLS + 4;
+/** Open water kept between the boat and the right edge. */
+export const SHIP_MARGIN = 2;
+/** Narrower strips draw nothing: the scene needs some sea to read. */
+export const VOYAGE_MIN_WIDTH = VOYAGE_SHIP_CELLS + SHIP_MARGIN + 6;
 export const VOYAGE_MAX_WIDTH = 64;
-/** Frame period; the sea moves every frame. */
+/** Frame period: the light on the water changes every frame. */
 export const VOYAGE_TICK_MS = 110;
-/** Frames per column the boat advances (~4.5 columns a second). */
-export const BOAT_EVERY = 2;
 
-export type Tone = "gull" | "wave" | "boat" | "wake" | "crest" | "swell" | "trough";
+export type Tone =
+  | "gull"
+  | "wave"
+  | "boat"
+  | "foam"
+  | "crest"
+  | "swell"
+  | "trough"
+  | "sky"
+  | "moon"
+  | "star"
+  | "starLit"
+  | "glint"
+  | "glintSoft";
 
 export interface Cell {
   /** One terminal column (the gull cell is a space plus its combining mark). */
@@ -35,10 +56,16 @@ export const TONE_COLOR: Record<Tone, string> = {
   gull: theme.dim,
   wave: theme.seaCrest,
   boat: theme.peach,
-  wake: theme.text,
+  foam: theme.text,
   crest: theme.seaCrest,
   swell: theme.sea,
   trough: theme.seaDeep,
+  sky: theme.seaDeep,
+  moon: theme.moon,
+  star: theme.star,
+  starLit: theme.starLit,
+  glint: theme.moon,
+  glintSoft: theme.glint,
 };
 
 /** Sea height in [-1, 1] at column x, frame t: two swells of different
@@ -47,27 +74,77 @@ export function swell(x: number, t: number): number {
   return (Math.sin(x * 0.42 - t * 0.22) + 0.6 * Math.sin(x * 0.17 + t * 0.09 + 1.3)) / 1.6;
 }
 
-export function seaCell(x: number, t: number): Cell {
+/** A fixed pseudo-random value in [0, 1) for column x: star places and the
+ *  sea's texture are a function of the column alone, so they never move. */
+function grain(x: number, salt = 0): number {
+  let h = Math.imul(x + 1, 0x9e3779b1) ^ Math.imul(salt + 7, 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d);
+  h = Math.imul(h ^ (h >>> 12), 0x297a2d39);
+  return ((h ^ (h >>> 15)) >>> 0) / 4294967296;
+}
+
+/** The glyph a sea column always shows: mostly ripples, some flat water. */
+export function seaGlyph(x: number): string {
+  return grain(x, 5) < 0.3 ? "-" : "~";
+}
+
+/** The colour of the water at column x, frame t: foam on the highest crests. */
+export function seaTone(x: number, t: number): Tone {
   const h = swell(x, t);
-  if (h > 0.3) return { ch: "~", tone: "crest" };
-  if (h > -0.2) return { ch: "~", tone: "swell" };
-  if (h > -0.55) return { ch: "-", tone: "trough" };
-  return { ch: " ", tone: "trough" };
+  if (h > 0.72) return "foam";
+  if (h > 0.3) return "crest";
+  if (h > -0.2) return "swell";
+  return "trough";
 }
 
-/** Column of the gull's cell at frame `tick` on a strip `width` wide. */
-export function shipAt(width: number, tick: number): number {
-  const step = Math.floor(tick / BOAT_EVERY);
-  return ((step % width) + width) % width;
+/** The moon's column: the top-left corner, one column in. */
+export const MOON_COL = 1;
+
+/** Column of the gull's cell: the boat rides near the right edge. */
+export function shipAt(width: number): number {
+  return Math.max(0, Math.floor(width) - VOYAGE_SHIP_CELLS - SHIP_MARGIN);
 }
 
-/** Frame at `tick` for a strip `width` columns wide: exactly `width` cells,
- *  or null when too narrow to sail. The ship's cells wrap around the strip. */
+/** Star glyphs by weight: most are dust, a few are brighter points. */
+const STAR_GLYPHS = ["·", "·", "·", "˚", "⋆", "✦"];
+/** Share of sky columns that hold a star. */
+const STAR_DENSITY = 0.11;
+/** Frames between a star's twinkles, and how many frames each one lasts. */
+const TWINKLE_MIN = 28;
+const TWINKLE_SPAN = 40;
+const TWINKLE_LEN = 3;
+
+/** The sky row at frame `tick`: a moon, stars on fixed columns and empty
+ *  space. Only a star's colour changes over time, never its place. */
+export function skyCells(width: number, tick: number): Cell[] | null {
+  const w = Math.floor(width);
+  if (!(w >= VOYAGE_MIN_WIDTH)) return null;
+  return Array.from({ length: w }, (_, x): Cell => {
+    if (x === MOON_COL) return { ch: "☾", tone: "moon" };
+    // keep a halo of empty sky around the moon
+    if (Math.abs(x - MOON_COL) <= 3 || grain(x) >= STAR_DENSITY) return { ch: " ", tone: "sky" };
+    const ch = STAR_GLYPHS[Math.floor(grain(x, 1) * STAR_GLYPHS.length)];
+    const period = TWINKLE_MIN + Math.floor(grain(x, 2) * TWINKLE_SPAN);
+    const phase = Math.floor(grain(x, 3) * period);
+    const lit = ch === "✦" || (((tick + phase) % period) + period) % period < TWINKLE_LEN;
+    return { ch, tone: lit ? "starLit" : "star" };
+  });
+}
+
+/** The sea row at frame `tick` for a strip `width` columns wide: exactly
+ *  `width` cells, or null when too narrow. Glyphs never change between
+ *  frames; only their colours do. */
 export function voyageCells(width: number, tick: number): Cell[] | null {
   const w = Math.floor(width);
   if (!(w >= VOYAGE_MIN_WIDTH)) return null;
-  const cells = Array.from({ length: w }, (_, x) => seaCell(x, tick));
-  const at = shipAt(w, tick);
+  const cells = Array.from({ length: w }, (_, x): Cell => ({ ch: seaGlyph(x), tone: seaTone(x, tick) }));
+  // the moon's path on the water: brightest right under it, shimmering
+  // with the swell, fading at the edges
+  for (let x = 0; x <= MOON_COL + 2; x++) {
+    const near = Math.abs(x - MOON_COL) <= 1;
+    cells[x].tone = near && swell(x, tick) > -0.2 ? "glint" : "glintSoft";
+  }
+  const at = shipAt(w);
   const [gull, wave, boat] = [...VOYAGE_MOTIF];
   const ship: Cell[] = [
     { ch: ` ${gull}`, tone: "gull" },
@@ -75,10 +152,7 @@ export function voyageCells(width: number, tick: number): Cell[] | null {
     { ch: boat, tone: "boat" },
     { ch: wave, tone: "wave" },
   ];
-  ship.forEach((c, i) => (cells[(at + i) % w] = c));
-  // foam trailing the stern, fading out
-  cells[(at - 1 + w) % w] = { ch: "~", tone: "wake" };
-  cells[(at - 2 + w) % w] = { ch: "~", tone: "crest" };
+  ship.forEach((c, i) => (cells[at + i] = c));
   return cells;
 }
 
@@ -93,19 +167,7 @@ export function runs(cells: Cell[]): { text: string; tone: Tone }[] {
   return out;
 }
 
-/** `show` comes from the screen's own budget (chrome.boatFits): only the
- *  screen knows whether one more row still fits the window. */
-export default function Voyage({ show, ms = VOYAGE_TICK_MS }: { show: boolean; ms?: number }) {
-  const [tick, setTick] = useState(0);
-  const { columns } = useTermSize();
-  useEffect(() => {
-    if (!show) return;
-    const t = setInterval(() => setTick((n) => n + 1), ms);
-    return () => clearInterval(t);
-  }, [show, ms]);
-  // root padding takes 4 columns
-  const cells = show ? voyageCells(Math.min(VOYAGE_MAX_WIDTH, columns - 4), tick) : null;
-  if (!cells) return null;
+function Row({ cells }: { cells: Cell[] }) {
   return (
     <Text wrap="truncate">
       {runs(cells).map((r, i) => (
@@ -114,5 +176,30 @@ export default function Voyage({ show, ms = VOYAGE_TICK_MS }: { show: boolean; m
         </Text>
       ))}
     </Text>
+  );
+}
+
+/** `rows` comes from the screen's own budget (chrome.voyageRowsFor): 0
+ *  draws nothing, 1 the sea, 2 the sky over the sea. Only the screen knows
+ *  how many rows still fit the window. */
+export default function Voyage({ rows, ms = VOYAGE_TICK_MS }: { rows: number; ms?: number }) {
+  const show = rows > 0;
+  const [tick, setTick] = useState(0);
+  const { columns } = useTermSize();
+  useEffect(() => {
+    if (!show) return;
+    const t = setInterval(() => setTick((n) => n + 1), ms);
+    return () => clearInterval(t);
+  }, [show, ms]);
+  // root padding takes 4 columns
+  const width = Math.min(VOYAGE_MAX_WIDTH, columns - 4);
+  const sea = show ? voyageCells(width, tick) : null;
+  if (!sea) return null;
+  const sky = rows >= 2 ? skyCells(width, tick) : null;
+  return (
+    <Box flexDirection="column">
+      {sky && <Row cells={sky} />}
+      <Row cells={sea} />
+    </Box>
   );
 }

@@ -18,6 +18,11 @@ export const theme = {
   seaDeep: "#1F3447",
   sea: "#3D6A8E",
   seaCrest: "#8CC0E4",
+  // Footer sky: moon and its glint on the water, stars at rest and lit
+  moon: "#F4E9C8",
+  glint: "#A89F7E",
+  star: "#56627A",
+  starLit: "#DCE6F5",
   highlightBg: "#FFB386",
   highlightFg: "#000000",
 } as const;
