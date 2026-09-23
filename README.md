@@ -185,10 +185,11 @@ Atlas discovers real directories, reads local history and native conversation
 stores, and launches installed runtimes. tmux owns persistent sessions;
 Atlas captures pane output for previews and hands the terminal to tmux when
 you attach. `ATLAS_TMUX_BIN` can override tmux discovery on `PATH` (set it
-empty to force direct launch); `ATLAS_NO_BOAT=1` hides the footer painting
-(a moonlit sky over the sea with the little boat `ོ𓂃𖠳𓂃`). The boat rides
-at anchor by default; `A` in the Hub sets it sailing (and back), and Atlas
-remembers the choice.
+empty to force direct launch); `ATLAS_NO_BOAT=1` turns the footer painting
+off for good. The painting (a moonlit sky over a restless sea where the
+little boat `ོ𓂃𖠳𓂃` sails, and now and then an octopus swims by) starts
+hidden; `A` in the Hub shows it or hides it again, and Atlas remembers the
+choice.
 
 `ATLAS_GLYPHS=safe` swaps Atlas's symbols for portable ones (ASCII plus
 the WGL4 symbols every Windows console font has), for terminals whose fonts
