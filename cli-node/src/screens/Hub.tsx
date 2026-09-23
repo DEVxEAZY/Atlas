@@ -36,6 +36,7 @@ import {
   killSession,
   listAtlasSessions,
   listAtlasSessionsAsync,
+  capturePaneAsync,
   listTmuxPanes,
   listTmuxPanesAsync,
   matchAtlasSession,
@@ -55,10 +56,14 @@ import {
   hintsWidth,
   hubVoyageRows,
   listHeightFor,
+  MIN_LIST_ROWS,
 } from "../components/chrome";
 import Voyage from "../components/Voyage";
 import { pendingCount } from "./Crons";
 import { getSettings, updateSettings } from "../settings";
+import { AiNoteView, aiRows, useAiNote, type Answer } from "../components/AiNote";
+import type { AiSession, AiSnapshot } from "../ai";
+import { peekTranscript } from "../native/peek";
 import KpiTitle, { hubKpis } from "../components/Kpis";
 import { loadJobs, nextRun, whenLabel } from "../cron";
 import { useLive, useLiveIndex } from "../components/useLiveIndex";
@@ -898,6 +903,8 @@ export default function Hub({
     // a kill or migration is between SIGTERM and relaunch: leaving now would
     // strand the agent stopped and never resumed
     if (killingRef.current || migrationInFlight()) return;
+    // the question box owns the keyboard while it is open
+    if (asking) return;
     // an armed X/T only survives its own second press: moving, filtering or
     // any other key disarms, so a later lone press never acts unprompted
     if (input !== "T" || key.ctrl || key.meta) setArmedMigrate(null);
@@ -925,11 +932,22 @@ export default function Hub({
       else if (at?.t === "toggleConvos") setExpandedConvos(true);
     } else if (key.return) activate(indexRef.current);
     else if (key.escape) {
-      if (filtering) setQuery("");
+      if (answer) setAnswer(null);
+      else if (filtering) setQuery("");
       else if (expandedRecents) setExpandedRecents(false);
       else if (expandedConvos) setExpandedConvos(false);
     } else if (input === "n") onNewSession();
     else if (input === "C" && !key.ctrl && !key.meta) onCrons?.();
+    else if (input === "?") {
+      if (!ai.enabled) {
+        flash("Nota inteligente: defina OPENROUTER_API_KEY ou ~/.config/atlas/openrouter.key.", 4000);
+        return;
+      }
+      const at = indexRef.current !== null ? rows[indexRef.current] : undefined;
+      const f = focusFor(at);
+      setAnswer(null);
+      setAsking(f ?? { about: "tudo que está rodando", load: async () => null });
+    }
     else if (input === "A" && !key.ctrl && !key.meta) {
       const { animation } = updateSettings({ animation: !getSettings().animation });
       flash(animation ? "Animação visível · A oculta." : "Animação oculta · A mostra.");
@@ -1006,7 +1024,89 @@ export default function Hub({
     }
   });
 
-  const listHeight = listHeightFor(termRows);
+  // ---- smart note (OpenRouter): what is going on, and questions about it
+  const [asking, setAsking] = useState<{ about: string; load: () => Promise<AiSession | null> } | null>(null);
+  const [answer, setAnswer] = useState<Answer | null>(null);
+  const convoFor = (dir: string, harness: string) =>
+    effectiveConvos
+      .filter((c) => c.dir === dir && c.harness === harness)
+      .sort((a, b) => b.updatedAt - a.updatedAt)[0];
+  const transcript = (c: NativeSession | undefined): string[] =>
+    c ? peekTranscript(c.harness, c.file, 80).map((l) => `${l.role}: ${l.text}`) : [];
+  const snapshot = async (): Promise<AiSnapshot> => {
+    const live = sessions.filter((s) => isRunning(s));
+    const recent = sessions.filter((s) => !isRunning(s)).slice(0, 5);
+    const list = await Promise.all(
+      [...live, ...recent].map(async (s): Promise<AiSession> => {
+        const tmux = tmuxForSession(s);
+        const running = isRunning(s);
+        return {
+          runtime: s.runtime,
+          dir: shorten(s.dir),
+          title: titles.get(`${s.dir}\0${s.runtime}`),
+          running,
+          tmux,
+          screen: running && tmux ? await capturePaneAsync(tmux, 40) : undefined,
+        };
+      }),
+    );
+    return { now: new Date().toLocaleString("pt-BR"), sessions: list, cron, totals: { sessions: sessions.length } };
+  };
+  /** The session a question is about: the highlighted row, read in full. */
+  const focusFor = (row: HubRow | undefined): { about: string; load: () => Promise<AiSession | null> } | null => {
+    if (row?.t === "session") {
+      const s = row.session;
+      return {
+        about: `${s.runtime} ${sessionDisplay(s)}`,
+        load: async () => {
+          const tmux = tmuxForSession(s);
+          return {
+            runtime: s.runtime,
+            dir: shorten(s.dir),
+            title: titles.get(`${s.dir}\0${s.runtime}`),
+            running: isRunning(s),
+            tmux,
+            screen: tmux ? await capturePaneAsync(tmux, 150) : transcript(convoFor(s.dir, s.runtime)),
+          };
+        },
+      };
+    }
+    if (row?.t === "convo") {
+      const c = row.convo;
+      return {
+        about: convoDisplay(c),
+        load: async () => {
+          const tmux = tmuxForConvo(c);
+          return {
+            runtime: c.harness,
+            dir: shorten(c.dir ?? "?"),
+            title: c.preview,
+            running: isConvoLive(c),
+            tmux,
+            screen: tmux ? await capturePaneAsync(tmux, 150) : transcript(c),
+          };
+        },
+      };
+    }
+    if (row?.t === "tmux") {
+      const { name, runtime, dir } = row;
+      return {
+        about: name,
+        load: async () => ({ runtime, dir: shorten(dir), running: true, tmux: name, screen: await capturePaneAsync(name, 150) }),
+      };
+    }
+    return null;
+  };
+  const liveKey = [...running].sort().join("|") + "#" + [...tmuxSessions.keys()].sort().join("|");
+  const ai = useAiNote(snapshot, liveKey);
+  const inner = Math.max(20, columns - 4);
+  const noteRows = aiRows(ai.enabled, asking ? null : answer, inner);
+  // an open answer borrows the footer painting's rows
+  const voyage = answer ? 0 : hubVoyageRows(termRows);
+  const listHeight = Math.max(
+    MIN_LIST_ROWS,
+    listHeightFor(termRows) - noteRows - (answer ? -hubVoyageRows(termRows) : 0),
+  );
   // the agora section may put a header first: land on the first live row
   useEffect(() => {
     setIndex(firstItemIndex(rows));
@@ -1152,7 +1252,24 @@ export default function Hub({
               : HINTS_SHORT
         }
       />
-      <Voyage rows={hubVoyageRows(termRows)} />
+      {ai.enabled && (
+        <AiNoteView
+          width={inner}
+          note={ai.note}
+          asking={asking}
+          answer={answer}
+          onCancel={() => setAsking(null)}
+          onSubmit={(question) => {
+            const target = asking;
+            setAsking(null);
+            void (async () => {
+              const focus = target ? await target.load() : null;
+              await ai.ask(question, focus, setAnswer);
+            })();
+          }}
+        />
+      )}
+      <Voyage rows={voyage} />
     </Box>
   );
 }

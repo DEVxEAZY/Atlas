@@ -173,6 +173,15 @@ async function tmuxQuery(args: string[]): Promise<string | null> {
   }
 }
 
+/** capturePane without blocking (the smart note reads live screens). */
+export async function capturePaneAsync(name: string, lines = 200): Promise<string[]> {
+  const out = await tmuxQuery(["capture-pane", "-p", "-t", name, "-S", `-${lines}`]);
+  if (out === null) return [];
+  const rows = out.split("\n").map((l) => l.replace(/\s+$/, ""));
+  while (rows.length > 0 && rows[rows.length - 1] === "") rows.pop();
+  return rows;
+}
+
 /** listTmuxPanes without blocking (the Hub's background refresh). */
 export async function listTmuxPanesAsync(): Promise<TmuxPane[]> {
   const out = await tmuxQuery([

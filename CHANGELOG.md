@@ -4,6 +4,16 @@ All notable changes to Atlas are documented in this file.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-23
+
+- Smart note: with an OpenRouter key (`OPENROUTER_API_KEY` or
+  `~/.config/atlas/openrouter.key`), a line above the footer summarises what
+  is going on, written by `deepseek/deepseek-v4-flash` without reasoning
+  (about a second). `?` asks about the highlighted session: the model reads
+  its tmux screen or transcript (low reasoning) and answers under the note.
+  Refreshes are rate-limited; secrets are redacted before sending; nothing
+  is sent without a key. Screens are captured without blocking the TUI.
+
 ## [0.8.0] - 2026-09-23
 
 - Session rows in "agora" and "Recentes" show a short title, like

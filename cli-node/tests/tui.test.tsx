@@ -1140,6 +1140,48 @@ describe("tui", () => {
     }
   });
 
+  test("? without an OpenRouter key says how to turn the smart note on", async () => {
+    setupEnv();
+    const app = mount(<App onDone={() => {}} />);
+    try {
+      await waitFrame(app, (f) => f.includes("Recentes"));
+      await key(app, "?");
+      await waitFrame(app, (f) => f.includes("OPENROUTER_API_KEY"));
+    } finally {
+      app.unmount();
+    }
+  });
+
+  test("the smart note shows a status, answers a question and closes with esc", async () => {
+    setupEnv();
+    const realFetch = globalThis.fetch;
+    const asked: string[] = [];
+    globalThis.fetch = (async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body));
+      const last = body.messages.at(-1).content as string;
+      asked.push(last);
+      const content = last.includes("Pergunta:") ? "O agente está rodando os testes." : "Nada rodando agora.";
+      return new Response(JSON.stringify({ choices: [{ message: { content } }] }));
+    }) as unknown as typeof fetch;
+    process.env.OPENROUTER_API_KEY = "sk-test";
+    const app = mount(<App onDone={() => {}} />);
+    try {
+      await waitFrame(app, (f) => f.includes("Nada rodando agora."), 8000);
+      await key(app, "?");
+      await waitFrame(app, (f) => f.includes("pergunte sobre"));
+      for (const ch of "e agora?") await key(app, ch);
+      await key(app, KEY.enter);
+      await waitFrame(app, (f) => f.includes("O agente está rodando os testes."), 8000);
+      expect(asked.some((m) => m.includes("Pergunta: e agora?"))).toBe(true);
+      await key(app, KEY.esc);
+      await waitFrame(app, (f) => !f.includes("O agente está rodando os testes."));
+    } finally {
+      app.unmount();
+      globalThis.fetch = realFetch;
+      delete process.env.OPENROUTER_API_KEY;
+    }
+  }, 30000);
+
   test("typing in the list jumps into the filter", async () => {
     const { rootA, rootB } = setupEnv();
     record(join(rootA, "proj"), "codex");

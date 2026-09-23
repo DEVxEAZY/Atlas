@@ -18,3 +18,8 @@ process.env.ATLAS_SETTINGS_FILE = join(root, "settings.json");
 // footer layout tests draw the painting; the default (hidden) is covered in
 // tests/settings.test.ts
 require("node:fs").writeFileSync(process.env.ATLAS_SETTINGS_FILE, JSON.stringify({ animation: true }));
+
+// the smart note never reaches the network from a test, and never reads
+// the developer's own key file
+delete process.env.OPENROUTER_API_KEY;
+process.env.ATLAS_OPENROUTER_KEY_FILE = join(root, "no-openrouter.key");

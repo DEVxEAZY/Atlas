@@ -166,6 +166,24 @@ is headless: `claude -p --permission-mode acceptEdits`, or
 global mode. Output goes to `~/.local/state/atlas/cron/<id>.log`, which you
 can read with `atlas cron log <id>`.
 
+## Smart note
+
+With an [OpenRouter](https://openrouter.ai) key, the Hub shows one line just
+above the footer: a short status of what is going on right now, written by
+`deepseek/deepseek-v4-flash` (set `ATLAS_AI_MODEL` for another model). It
+refreshes when sessions come or go, at most once a minute, and every five
+minutes. Press `?` to ask a question about the highlighted session (or
+about everything): the model reads its tmux screen or conversation
+transcript and answers under the note; `esc` closes the answer.
+
+The key comes from `OPENROUTER_API_KEY`, else from
+`~/.config/atlas/openrouter.key` (keep it `chmod 600`). Without a key the
+note stays off and nothing is sent. With one, Atlas sends OpenRouter the
+session paths, runtimes and conversation titles, scheduled task counts, and
+the last lines of live tmux screens (more of the session a question is
+about). Tokens, keys and passwords are redacted first. The model only reads:
+it never types into a session.
+
 ## Local data and privacy
 
 Atlas stores session history at `~/.local/share/atlas/history.json` and reads
