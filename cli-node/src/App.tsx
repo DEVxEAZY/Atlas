@@ -4,6 +4,7 @@ import Hub from "./screens/Hub";
 import DirPicker from "./screens/DirPicker";
 import Running, { type RunningTarget } from "./screens/Running";
 import Runtime from "./screens/Runtime";
+import Crons from "./screens/Crons";
 import { migrationInFlight, migrationsSettled } from "./migrate";
 import { launchDetached } from "./tmux";
 
@@ -22,7 +23,8 @@ export type Screen =
   | { name: "hub" }
   | { name: "dir"; title: string; domain: string | null }
   | { name: "runtime"; dir: string; fresh: boolean }
-  | { name: "running"; target: RunningTarget };
+  | { name: "running"; target: RunningTarget }
+  | { name: "crons" };
 
 interface Props {
   onDone: (c: Choice | null) => void;
@@ -81,6 +83,10 @@ export default function App({ onDone: done, start }: Props) {
     );
   }
 
+  if (top.name === "crons") {
+    return <Crons onBack={pop} onQuit={() => onDone(null)} />;
+  }
+
   if (top.name === "running") {
     return (
       <Running
@@ -100,6 +106,7 @@ export default function App({ onDone: done, start }: Props) {
       onOpen={(c) => onDone(c)}
       onViewRunning={(target) => push({ name: "running", target })}
       onNewSession={() => push({ name: "dir", title: "Nova sessão", domain: null })}
+      onCrons={() => push({ name: "crons" })}
       onDrill={(domain) => push({ name: "dir", title: domain, domain })}
       onQuit={() => onDone(null)}
       onMigrate={(c) => launchDetached(c.dir, c.runtime, c.resume)}

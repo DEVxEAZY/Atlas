@@ -6,6 +6,7 @@ import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { render } from "ink";
 import App, { type Choice, type Screen } from "./App";
+import { cronMain } from "./cronCli";
 import { load, record, type Session } from "./history";
 import { runningKeys } from "./process";
 import { RUNTIME_ORDER, buildArgv } from "./runtimes";
@@ -232,8 +233,10 @@ export async function here(target: string, opts: { dryRun?: boolean } = {}): Pro
 
 /** The TUI draws on the alternate screen (like vim/htop): the mouse wheel
  *  can no longer scroll the terminal back through stale frames, and the
- *  shell's screen comes back intact on exit — before any handoff to tmux. */
-export const RENDER_OPTIONS = { alternateScreen: true } as const;
+ *  shell's screen comes back intact on exit — before any handoff to tmux.
+ *  Incremental rendering rewrites only changed lines, so the footer sea can
+ *  animate at ~9 fps without repainting the whole screen each frame. */
+export const RENDER_OPTIONS = { alternateScreen: true, incrementalRendering: true } as const;
 
 async function pick(start?: Screen): Promise<Choice | null> {
   let choice: Choice | null = null;
@@ -273,6 +276,7 @@ export function parseArgs(argv: string[]): Args {
       console.log("senão mostra o agente que já roda ali, senão abre o último runtime usado,");
       console.log("senão pergunta o runtime.");
       console.log("Sessões com agente rodando mostram um indicador animado e ficam no topo.");
+      console.log("atlas cron agenda um prompt para um agente rodar sozinho (atlas cron --help).");
       process.exit(0);
     } else if (!a.startsWith("-") && out.dir === undefined) out.dir = a;
     else {
@@ -286,6 +290,8 @@ export function parseArgs(argv: string[]): Args {
 }
 
 async function main(): Promise<number> {
+  // a directory literally named "cron" is still reachable as ./cron
+  if (process.argv[2] === "cron") return cronMain(process.argv.slice(3));
   const args = parseArgs(process.argv.slice(2));
   if (args.list) return listSessions();
   if (args.dir && args.runtime)

@@ -4,11 +4,28 @@ All notable changes to Atlas are documented in this file.
 
 ## [Unreleased]
 
+- Scheduled tasks, shaped like Claude Code's `/schedule`: a prompt, a
+  directory, a runtime (claude, codex or shell) and a schedule written as
+  `todo dia 09:00`, `dias úteis 18:30`, `a cada 30 min` or a cron expression.
+  `atlas cron add` files a proposal, and pressing `C` in the Hub then `Enter`
+  installs it in the user crontab. Agents never install one themselves. The
+  same screen pauses (`p`), runs now (`R`) and deletes (`x x`). The Hub says
+  when proposals are waiting. Runs are headless with explicit permissions,
+  guarded by `flock`, and logged. The `atlas-cron` skill (`atlas cron skill
+  --install`, or `S` on the screen) teaches Claude Code and Codex to propose
+  tasks.
+
 - The footer boat is now a light one-row motif, `ོ𓂃𖠳𓂃` (a gull, a wave, a
   sailboat, a wave), drifting one column every 250 ms instead of a two-row
   ASCII scene redrawn every 140 ms: one more row for the list and about
   half the renders. It still appears only where its row fits, from 16 rows.
 - The social preview and static Hub show the new motif.
+- The boat now sails a sea: the rest of its row is a swell of `~` and `-`
+  in three blues that moves every frame (110 ms), with a foam wake behind
+  the stern. The boat advances one column every two frames and wraps around
+  the edges — it sails off the right while its bow comes back on the left —
+  instead of jumping back to the start. The Hub uses Ink's incremental
+  rendering, so each frame rewrites only the lines that changed.
 
 ## [0.3.0] - 2026-09-22
 

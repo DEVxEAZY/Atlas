@@ -56,6 +56,7 @@ import {
   listHeightFor,
 } from "../components/chrome";
 import Voyage from "../components/Voyage";
+import { pendingCount } from "./Crons";
 import { useLive, useLiveIndex } from "../components/useLiveIndex";
 import { useTermSize } from "../components/useTermSize";
 import { useSpinner } from "../components/useSpinner";
@@ -100,6 +101,8 @@ export const HINTS_FULL: Array<[string, string]> = [
   ["T", "tmux"],
   ["q", "sair"],
 ];
+/** The full set plus the scheduled tasks key, on screens wide enough. */
+export const HINTS_WIDE: Array<[string, string]> = [...HINTS_FULL.slice(0, -1), ["C", "cron"], ["q", "sair"]];
 export const HINTS_SHORT: Array<[string, string]> = [
   ["Enter", "abrir"],
   ["n", "nova"],
@@ -112,6 +115,7 @@ export const HINTS_FILTER: Array<[string, string]> = [
   ["esc", "lista"],
 ];
 export const HINTS_FULL_MIN_COLS = hintsWidth(HINTS_FULL) + 4;
+export const HINTS_WIDE_MIN_COLS = hintsWidth(HINTS_WIDE) + 4;
 
 type HubRow =
   | { t: "toggleRecents" }
@@ -129,6 +133,8 @@ interface Props {
   onOpen: (c: Choice) => void;
   onViewRunning: (t: RunningTarget) => void;
   onNewSession: () => void;
+  /** Scheduled tasks screen (C). */
+  onCrons?: () => void;
   onDrill: (domain: string) => void;
   onQuit: () => void;
   /** Background relaunch into tmux (never attaches). */
@@ -275,6 +281,7 @@ export default function Hub({
   onOpen,
   onViewRunning,
   onNewSession,
+  onCrons,
   onDrill,
   onQuit,
   onMigrate,
@@ -345,7 +352,11 @@ export default function Hub({
   const [showTmp, setShowTmp] = useState(false);
   const [focus, setFocus] = useState<"list" | "filter">("list");
   const [index, indexRef, setIndex] = useLiveIndex(0);
-  const [msg, setMsg] = useState("");
+  // proposals filed by an agent only run once installed here: say so
+  const [msg, setMsg] = useState(() => {
+    const n = pendingCount();
+    return n === 0 ? "" : `${n} ${n === 1 ? "tarefa agendada aguarda" : "tarefas agendadas aguardam"} confirmação — C para revisar.`;
+  });
   /** Row key armed by the first X (second X on the same row kills). */
   // armed keys and the busy flag are read through refs: keys coalesced
   // into one stdin read (lagged SSH, a blocking refresh) must see the
@@ -808,6 +819,7 @@ export default function Hub({
       else if (expandedRecents) setExpandedRecents(false);
       else if (expandedConvos) setExpandedConvos(false);
     } else if (input === "n") onNewSession();
+    else if (input === "C" && !key.ctrl && !key.meta) onCrons?.();
     else if (input === "q") onQuit();
     else if (input === "/") setFocus("filter");
     else if (input === "r" || input === "d") {
@@ -1015,7 +1027,7 @@ export default function Hub({
           focus === "filter"
             ? HINTS_FILTER
             : columns >= HINTS_FULL_MIN_COLS
-              ? HINTS_FULL.filter(([k]) => tmuxOk || k !== "T")
+              ? (columns >= HINTS_WIDE_MIN_COLS ? HINTS_WIDE : HINTS_FULL).filter(([k]) => tmuxOk || k !== "T")
               : HINTS_SHORT
         }
       />

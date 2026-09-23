@@ -136,12 +136,37 @@ atlas --dir "$HOME/projects/my-app" --runtime shell --print
 
 `--print` shows the launch or attach command without running it.
 
+## Scheduled tasks
+
+A scheduled task is a prompt that Claude, Codex or a shell command runs on
+its own in a directory, on a schedule, like Claude Code's `/schedule`. Ask
+your agent ("todo dia às 9h, revise os PRs abertos") or file it yourself:
+
+```sh
+atlas cron skill --install   # teaches Claude Code (and Codex) the atlas-cron skill
+atlas cron add --when "dias úteis 09:00" "Revise os PRs abertos e resuma em REVIEW.md"
+```
+
+`add` only files a proposal. It runs once you install it in Atlas: press `C`
+in the Hub, then `Enter` on the task. On that screen, `p` pauses a task,
+`R` runs it now, `x` twice deletes it, and `S` installs the skill.
+
+Schedules can be written as `a cada 30 min`, `a cada 2 h`, `todo dia 09:00`,
+`dias úteis 18:30`, `toda segunda 08:00`, `@daily` or any 5-field cron
+expression. They use the machine's timezone. The user crontab does the
+scheduling, and Atlas owns only the lines it marks `# atlas-cron:`. Each run
+is headless: `claude -p --permission-mode acceptEdits`, or
+`codex exec --sandbox workspace-write`. It never inherits a permissive
+global mode. Output goes to `~/.local/state/atlas/cron/<id>.log`, which you
+can read with `atlas cron log <id>`.
+
 ## Local data and privacy
 
 Atlas stores session history at `~/.local/share/atlas/history.json` and reads
 local Claude, Codex, and Muse conversation stores to list and resume them.
 Previews may display conversation text, terminal output, and local paths.
-Use `ATLAS_HISTORY_FILE` to select another history file.
+Use `ATLAS_HISTORY_FILE` to select another history file. Scheduled tasks
+live in `~/.local/share/atlas/cron/`.
 
 Atlas does not upload your data, run an Atlas daemon, or require an Atlas
 cloud account. Agent CLIs retain their own authentication, network behavior,

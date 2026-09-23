@@ -14,6 +14,10 @@ export const theme = {
   amber: "#F2C14E",
   danger: "#F87171",
   live: "#7EE787",
+  // Footer sea (Voyage): deep trough → swell → crest
+  seaDeep: "#1F3447",
+  sea: "#3D6A8E",
+  seaCrest: "#8CC0E4",
   highlightBg: "#FFB386",
   highlightFg: "#000000",
 } as const;
