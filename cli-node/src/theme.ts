@@ -9,6 +9,8 @@ export const theme = {
   secondary: "#FFFFFF",
   dim: "#8A8A8A",
   faint: "#2A2A2A",
+  /** Quiet separators (the Hub's KPI strip). */
+  hush: "#4A4A4A",
   // Sunset neon soft ramp
   peach: "#FFB386",
   coral: "#FF8F6B",
@@ -25,6 +27,8 @@ export const theme = {
   glint: "#A89F7E",
   star: "#56627A",
   starLit: "#DCE6F5",
+  // Sea life under the footer's water
+  squid: "#B7A6E8",
   highlightBg: "#FFB386",
   highlightFg: "#000000",
 } as const;

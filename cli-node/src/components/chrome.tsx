@@ -1,6 +1,7 @@
 import React, { type ReactNode } from "react";
 import { Box, Text } from "ink";
 import { theme } from "../theme";
+import { getSettings, type Settings } from "../settings";
 
 export function Title({ children }: { children: ReactNode }) {
   return (
@@ -92,10 +93,14 @@ export const SKY_MIN_ROWS = 24;
 /** Below this many terminal rows the sky keeps a single row. */
 export const STARS_MIN_ROWS = 28;
 
-/** Off when ATLAS_NO_BOAT is set (any non-empty value but "0"). */
-export function voyageEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+/** Off when the animation is hidden (A in the Hub) or ATLAS_NO_BOAT is set
+ *  (any non-empty value but "0"). */
+export function voyageEnabled(
+  env: NodeJS.ProcessEnv = process.env,
+  settings: Settings = getSettings(),
+): boolean {
   const v = env.ATLAS_NO_BOAT;
-  return !v || v === "0";
+  return settings.animation && (!v || v === "0");
 }
 
 /** Rows the footer painting takes under a screen whose other rows (chrome

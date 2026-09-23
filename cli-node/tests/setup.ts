@@ -15,3 +15,6 @@ delete process.env.ATLAS_GLYPHS;
 
 // the footer's sail setting lives in a throwaway file, never the real one
 process.env.ATLAS_SETTINGS_FILE = join(root, "settings.json");
+// footer layout tests draw the painting; the default (hidden) is covered in
+// tests/settings.test.ts
+require("node:fs").writeFileSync(process.env.ATLAS_SETTINGS_FILE, JSON.stringify({ animation: true }));

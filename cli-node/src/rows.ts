@@ -29,10 +29,11 @@ export function sessionLabel(s: Session): string {
   return `${s.runtime} ${sessionDisplay(s)} · ${ago(s.last_used)} · ${s.uses}x${missing}`;
 }
 
-export function matchSession(s: Session, query: string): boolean {
+/** Every word of the query in the session's runtime, path or title. */
+export function matchSession(s: Session, query: string, title?: string | null): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
-  const hay = `${s.runtime} ${s.dir} ${sessionDisplay(s)}`.toLowerCase();
+  const hay = `${s.runtime} ${s.dir} ${sessionDisplay(s)} ${title ?? ""}`.toLowerCase();
   return q.split(/\s+/).every((w) => hay.includes(w));
 }
 

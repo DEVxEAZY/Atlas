@@ -139,7 +139,7 @@ export const HINTS_FULL: Array<[string, string]> = [
 export const HINTS_WIDE: Array<[string, string]> = [
   ...HINTS_FULL.slice(0, -1),
   ["C", "cron"],
-  ["A", "barco"],
+  ["A", "animação"],
   ["q", "sair"],
 ];
 export const HINTS_SHORT: Array<[string, string]> = [
@@ -182,16 +182,47 @@ interface Props {
   onMigrate: (c: Choice) => MigrateResult;
 }
 
+/** A conversation summary as rows show it: quoted, one line, 48 chars. */
+export function titleText(title: string | null | undefined): string {
+  const t = (title ?? "")
+    // markup the harness wraps around pasted text or commands, even cut off
+    .replace(/<\/?[A-Za-z_][\w-]*(?:\s[^>]*)?(?:>|$)/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/[\s"'“”:]+$/, "")
+    .trim();
+  return t ? `  “${t.slice(0, 48)}”` : "";
+}
+
+/** "dir\0runtime" -> the summary of that session's conversation: the one
+ *  running now when a live agent holds it, else the most recent. */
+export function sessionTitles(
+  convos: NativeSession[],
+  live: { has(id: string): boolean },
+): Map<string, string> {
+  const out = new Map<string, string>();
+  const ordered = [...convos]
+    .filter((c) => c.dir && c.preview)
+    .sort((a, b) => Number(live.has(b.id)) - Number(live.has(a.id)) || b.updatedAt - a.updatedAt);
+  for (const c of ordered) {
+    const key = `${c.dir}\0${c.harness}`;
+    if (!out.has(key)) out.set(key, c.preview!);
+  }
+  return out;
+}
+
 const SessionContent = React.memo(function SessionContent({
   s,
   hot,
   running,
   tmux,
+  title,
 }: {
   s: Session;
   hot: boolean;
   running: boolean;
   tmux: boolean;
+  /** Summary of the session's conversation, as conversation rows show it. */
+  title?: string | null;
 }) {
   const fg = hot ? theme.highlightFg : theme.text;
   const icon = RUNTIME_ICON[s.runtime] ?? G.bullet;
@@ -206,11 +237,11 @@ const SessionContent = React.memo(function SessionContent({
       )}
       {tmux && <Text color={hot ? theme.highlightFg : theme.peach}>{`${TMUX_MARK} `}</Text>}
       <Text color={iconColor}>{`${icon} `}</Text>
-      <Text color={fg}>{`${s.runtime.padEnd(6)} ${sessionDisplay(s)}  `}</Text>
+      <Text color={fg}>{`${s.runtime.padEnd(6)} ${sessionDisplay(s)}`}</Text>
       {hot ? (
-        <Text color="#3A2A1A">{`· ${ago(s.last_used)} · ${s.uses}x${missing}`}</Text>
+        <Text color="#3A2A1A">{`${titleText(title)}  · ${ago(s.last_used)} · ${s.uses}x${missing}`}</Text>
       ) : (
-        <Text dimColor>{`· ${ago(s.last_used)} · ${s.uses}x${missing}`}</Text>
+        <Text dimColor>{`${titleText(title)}  · ${ago(s.last_used)} · ${s.uses}x${missing}`}</Text>
       )}
     </Text>
   );
@@ -230,7 +261,7 @@ const ConvoContent = React.memo(function ConvoContent({
   const fg = hot ? theme.highlightFg : theme.text;
   const icon = RUNTIME_ICON[c.harness] ?? G.bullet;
   const iconColor = hot ? theme.highlightFg : (RUNTIME_COLOR[c.harness] ?? theme.text);
-  const preview = c.preview ? `  “${c.preview.slice(0, 48)}”` : `  · ${c.id.slice(0, 8)}`;
+  const preview = c.preview ? titleText(c.preview) : `  · ${c.id.slice(0, 8)}`;
   return (
     <Text>
       {live ? (
@@ -427,6 +458,14 @@ export default function Hub({
     const n = pendingCount();
     return n === 0 ? "" : `${n} ${n === 1 ? "tarefa agendada aguarda" : "tarefas agendadas aguardam"} confirmação — C para revisar.`;
   });
+  // a passing note: shown, then cleared unless something replaced it
+  const flashTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const flash = (text: string, ms = 2500) => {
+    setMsg(text);
+    clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setMsg((m) => (m === text ? "" : m)), ms);
+  };
+  useEffect(() => () => clearTimeout(flashTimer.current), []);
   /** Row key armed by the first X (second X on the same row kills). */
   // armed keys and the busy flag are read through refs: keys coalesced
   // into one stdin read (lagged SSH, a blocking refresh) must see the
@@ -569,6 +608,8 @@ export default function Hub({
     return out;
   }, [convos, fullHarness]);
 
+  const titles = useMemo(() => sessionTitles(effectiveConvos, liveResumes), [effectiveConvos, liveResumes]);
+
   /** tmux sessions already shown through a history/convo row (no duplicates). */
   const representedTmux = useMemo(() => {
     const out = new Set<string>();
@@ -630,7 +671,7 @@ export default function Hub({
     // showing them too, pinned to the top of their own sections)
     const out: HubRow[] = [];
     const liveSessions = sessions
-      .filter((s) => isRunning(s) && matchSession(s, query))
+      .filter((s) => isRunning(s) && matchSession(s, query, titles.get(`${s.dir}\0${s.runtime}`)))
       .sort((a, b) => (a.last_used < b.last_used ? 1 : -1));
     const liveConvos = effectiveConvos
       .filter((c) => isConvoLive(c) && matchConvo(c, query))
@@ -643,7 +684,7 @@ export default function Hub({
     }
     out.push({ t: "toggleRecents" });
     if (showRecents) {
-      const visible = sessions.filter((s) => matchSession(s, query));
+      const visible = sessions.filter((s) => matchSession(s, query, titles.get(`${s.dir}\0${s.runtime}`)));
       // live sessions pin to the top (stable: keeps recency order inside groups)
       const pinned = visible
         .map((s, i) => ({ s, i }))
@@ -730,7 +771,7 @@ export default function Hub({
     for (const d of domains) out.push({ t: "domain", domain: d.domain, repos: d.repos });
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessions, effectiveConvos, totals, expandedHarness, loadingHarness, query, filtering, showRecents, showConvos, domains, running, liveResumes, tmuxSessions, strays, showTmp]);
+  }, [sessions, effectiveConvos, totals, expandedHarness, loadingHarness, query, filtering, showRecents, showConvos, domains, running, liveResumes, tmuxSessions, strays, showTmp, titles]);
 
   useEffect(() => {
     setIndex((prev) => {
@@ -744,7 +785,7 @@ export default function Hub({
     const total = sessions.length;
     if (!showRecents) return total === 0 ? `${G.collapsed} Recentes · nenhuma` : `${G.collapsed} Recentes · ${total}`;
     if (filtering) {
-      const n = sessions.filter((s) => matchSession(s, query)).length;
+      const n = sessions.filter((s) => matchSession(s, query, titles.get(`${s.dir}\0${s.runtime}`))).length;
       return `${G.expanded} Recentes · ${n} ${n === 1 ? "resultado" : "resultados"}`;
     }
     return total <= RECENT_LIMIT ? `${G.expanded} Recentes · ${total}` : `${G.expanded} Recentes · ${RECENT_LIMIT} de ${total}`;
@@ -890,8 +931,8 @@ export default function Hub({
     } else if (input === "n") onNewSession();
     else if (input === "C" && !key.ctrl && !key.meta) onCrons?.();
     else if (input === "A" && !key.ctrl && !key.meta) {
-      const { sail } = updateSettings({ sail: !getSettings().sail });
-      setMsg(sail ? "Barco navegando · A ancora." : "Barco ancorado · A solta as velas.");
+      const { animation } = updateSettings({ animation: !getSettings().animation });
+      flash(animation ? "Animação visível · A oculta." : "Animação oculta · A mostra.");
     }
     else if (input === "q") onQuit();
     else if (input === "/") setFocus("filter");
@@ -1095,6 +1136,7 @@ export default function Hub({
               s={row.session}
               hot={hot}
               running={isRunning(row.session)}
+              title={titles.get(`${row.session.dir}\0${row.session.runtime}`)}
               tmux={tmuxForSession(row.session) !== null}
             />
           </ItemRow>

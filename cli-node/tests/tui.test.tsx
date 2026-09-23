@@ -13,7 +13,7 @@ import { isTmpDir } from "../src/rows";
 import type { NativeSession } from "../src/native/index";
 import { KEY, LIVE_SPIN_RE, burst, key, mount, sleep, waitFor, waitFrame } from "./ink-helpers";
 import { setupFakeTmux, type FakeTmux } from "./tmux-fake";
-import { getSettings, loadSettings } from "../src/settings";
+import { loadSettings, updateSettings } from "../src/settings";
 
 let tmpdirs: string[] = [];
 let fakeTmux: FakeTmux[] = [];
@@ -1121,18 +1121,20 @@ describe("tui", () => {
     }
   });
 
-  test("A anchors the sailing boat and sets it sailing again, and remembers it", async () => {
+  test("A hides the animation and shows it again, and remembers it", async () => {
     setupEnv();
+    updateSettings({ animation: true });
     const app = mount(<App onDone={() => {}} />);
     try {
       await waitFrame(app, (f) => f.includes("Recentes"));
-      const start = getSettings().sail;
       await key(app, "A");
-      await waitFrame(app, (f) => f.includes(start ? "Barco ancorado" : "Barco navegando"));
-      expect(loadSettings().sail).toBe(!start);
+      await waitFrame(app, (f) => f.includes("Animação oculta"));
+      expect(loadSettings().animation).toBe(false);
       await key(app, "A");
-      await waitFrame(app, (f) => f.includes(start ? "Barco navegando" : "Barco ancorado"));
-      expect(loadSettings().sail).toBe(start);
+      await waitFrame(app, (f) => f.includes("Animação visível"));
+      expect(loadSettings().animation).toBe(true);
+      // a passing note: it clears itself
+      await waitFrame(app, (f) => !f.includes("Animação visível"), 5000);
     } finally {
       app.unmount();
     }

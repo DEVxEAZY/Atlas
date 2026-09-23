@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { FRAME_MS } from "../src/components/clock";
+import { RICH, SAFE } from "../src/glyphs";
 import {
   MIN_LIST_ROWS,
   SKY_MIN_ROWS,
@@ -22,6 +23,10 @@ import {
   SAIL_EVERY,
   sailAt,
   seaColor,
+  seaGlyph,
+  setSeaSeed,
+  creatureAt,
+  swell,
   shipAt,
   skyCells,
   voyageCells,
@@ -36,6 +41,9 @@ import {
   HINTS_FULL_MIN_COLS,
   HINTS_SHORT,
 } from "../src/screens/Hub";
+
+// a fixed sea for the whole file: every run of Atlas gets a random one
+setSeaSeed(1);
 
 /** Columns for this footer's characters: combining marks (the gull) take
  *  none, every other code point here takes one — as Ink's string-width says. */
@@ -68,17 +76,15 @@ describe("voyage footer", () => {
         const cells = voyageCells(w, t)!;
         expect(cells[shipAt(w)].tone).toBe("gull");
         expect(cells[shipAt(w) + 2].tone).toBe("boat");
-        expect(cells.slice(shipAt(w) + 4).every((c) => c.ch === "~" || c.ch === "-")).toBe(true); // open water after it
+        expect(cells.slice(shipAt(w) + 4).every((c) => RICH.sea.join("").includes(c.ch))).toBe(true); // open water after it
       }
     }
   });
 
-  test("only light moves: glyphs stay, colours change, crests turn to foam", () => {
+  test("the light on the water moves every frame, crests turn to foam", () => {
     const w = 64;
-    const glyphs = (t: number) => line(w, t);
-    const tones = (t: number) => voyageCells(w, t)!.map((c) => c.tone).join();
-    for (let t = 1; t < 100; t++) expect(glyphs(t)).toBe(glyphs(0));
-    expect(tones(1)).not.toBe(tones(0));
+    const colors = (t: number) => voyageCells(w, t)!.map((c) => c.color).join();
+    expect(colors(1)).not.toBe(colors(0));
     const seen = new Set(Array.from({ length: 100 }, (_, t) => voyageCells(w, t)!.map((c) => c.tone)).flat());
     for (const tone of ["foam", "crest", "swell", "trough", "glint"]) expect(seen.has(tone as never)).toBe(true);
   });
@@ -248,5 +254,108 @@ describe("clean transitions on the water", () => {
     for (let t = 0; t < 120; t++)
       for (const c of skyCells(w, t)!) if (c.tone === "star" || c.tone === "starLit") seen.add(c.color ?? "rest");
     expect(seen.size).toBeGreaterThan(3); // in-between shades, not just on and off
+  });
+});
+
+describe("light waves", () => {
+  test("each column's glyph follows the water's height, trough to crest", () => {
+    expect(seaGlyph(-1)).toBe("_");
+    expect(seaGlyph(1)).toBe("˜");
+    expect("~∼-").toContain(seaGlyph(0)); // the middle has several shapes
+    expect(seaGlyph(1, SAFE)).toBe("^");
+  });
+
+  test("wave shapes drift slowly: few columns change glyph between frames", () => {
+    const w = 64;
+    const glyphs = (t: number) => voyageCells(w, t, undefined, false)!.map((c) => c.ch);
+    let changed = 0;
+    for (let t = 1; t < 40; t++) {
+      const a = glyphs(t - 1);
+      const b = glyphs(t);
+      changed += a.filter((ch, x) => ch !== b[x]).length;
+    }
+    const perFrame = changed / 39;
+    expect(perFrame).toBeGreaterThan(0); // the waves do move
+    expect(perFrame).toBeLessThan(w / 3); // gently, not a flicker
+  });
+});
+
+describe("an unpredictable sea", () => {
+  const row = (t: number) => voyageCells(64, t)!.map((c) => c.ch).join("");
+
+  test("each run gets its own sea; one seed always plays the same", () => {
+    setSeaSeed(1);
+    const a = [0, 50, 100].map(row);
+    setSeaSeed(2);
+    const b = [0, 50, 100].map(row);
+    setSeaSeed(1);
+    expect([0, 50, 100].map(row)).toEqual(a);
+    expect(b).not.toEqual(a);
+  });
+
+  test("the sequence never repeats over minutes of frames", () => {
+    const seen = new Set<string>();
+    for (let t = 0; t < 1500; t++) seen.add(row(t)); // five minutes at 5 fps
+    expect(seen.size).toBeGreaterThan(1400);
+  });
+
+  test("still continuous: a column's height moves a little per frame", () => {
+    for (let x = 0; x < 64; x += 3)
+      for (let t = 1; t < 400; t++) expect(Math.abs(swell(x, t) - swell(x, t - 1))).toBeLessThan(0.45);
+  });
+
+  test("wave shapes vary: a level shows more than one form across the sea", () => {
+    const mids = new Set<string>();
+    for (let t = 0; t < 300; t += 10) for (const ch of row(t)) if ("~∼-".includes(ch)) mids.add(ch);
+    expect(mids.size).toBeGreaterThan(1);
+  });
+});
+
+describe("sea life", () => {
+  const W = 64;
+  const passes = (seed: number, frames = 1200 * 12) => {
+    setSeaSeed(seed);
+    let shown = 0;
+    let runs = 0;
+    let prev = false;
+    for (let t = 0; t < frames; t++) {
+      const on = creatureAt(W, t) !== null;
+      if (on) shown++;
+      if (on && !prev) runs++;
+      prev = on;
+    }
+    setSeaSeed(1);
+    return { share: shown / frames, runs };
+  };
+
+  test("an octopus or a squid swims by, rarely", () => {
+    const all = [1, 2, 3, 4, 5].map((seed) => passes(seed));
+    expect(all.reduce((n, p) => n + p.runs, 0)).toBeGreaterThan(0); // it happens
+    for (const p of all) expect(p.share).toBeLessThan(0.15); // but seldom
+  });
+
+  test("it crosses from one edge to the other, one column at a time, under the boat", () => {
+    let seed = 1;
+    let t0 = -1;
+    for (; seed < 50 && t0 < 0; seed++) {
+      setSeaSeed(seed);
+      for (let t = 0; t < 1200 * 6; t++) if (creatureAt(W, t)) { t0 = t; break; }
+    }
+    setSeaSeed(seed - 1);
+    const xs: number[] = [];
+    let t = t0;
+    for (let c = creatureAt(W, t); c; c = creatureAt(W, ++t)) xs.push(c.x);
+    const first = creatureAt(W, t0)!;
+    expect(xs.length).toBeGreaterThan(W); // a full crossing
+    for (let i = 1; i < xs.length; i++) expect(Math.abs(xs[i] - xs[i - 1])).toBeLessThanOrEqual(1);
+    expect(Math.min(...xs)).toBeLessThan(0 + 1);
+    expect(Math.max(...xs)).toBeGreaterThan(W - 4);
+    expect(["octopus", "squid"]).toContain(first.kind);
+    // drawn under the ship: the ship's cells always win
+    for (let k = t0; k < t; k += 7) {
+      const cells = voyageCells(W, k, undefined, true)!;
+      expect(cells.filter((c) => c.tone === "boat")).toHaveLength(1);
+    }
+    setSeaSeed(1);
   });
 });

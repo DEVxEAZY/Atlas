@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { hubKpis, packKpis, type Kpi } from "../src/components/Kpis";
 
-const text = (kpis: Kpi[]) => kpis.map((k) => k.map((p) => p.text).join("")).join(" · ");
+const text = (kpis: Kpi[]) => kpis.map((k) => k.map((p) => p.text).join("")).join("  ·  ");
 const base = { live: {}, tmux: 0, cron: { active: 0, pending: 0, next: null }, sessions: 13 };
 
 describe("hub KPIs", () => {
@@ -13,12 +13,12 @@ describe("hub KPIs", () => {
       sessions: 13,
     });
     expect(text(k)).toBe(
-      "◉ 3 agora · ✳\uFE0E2 ⬢1 · 𖥠 2 tmux · ◷ 1 aguardando · ◷ 2 agendadas · próx. hoje 09:00 · 13 sessões",
+      "◉ 3 agora  ·  ✳\uFE0E 2  ⬢ 1  ·  𖥠 2 tmux  ·  ◷ 1 aguardando  ·  ◷ 2 agendadas · próx. hoje 09:00  ·  13 sessões",
     );
   });
 
   test("quiet machine: no zero counters, no conversation total", () => {
-    expect(text(hubKpis({ ...base, sessions: 1 }))).toBe("○ nada rodando · 1 sessão");
+    expect(text(hubKpis({ ...base, sessions: 1 }))).toBe("○ nada rodando  ·  1 sessão");
   });
 
   test("narrow widths drop KPIs from the right, never cut one in half", () => {

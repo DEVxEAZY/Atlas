@@ -4,7 +4,39 @@ All notable changes to Atlas are documented in this file.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-23
+
+- Session rows in "agora" and "Recentes" show a short title, like
+  conversation rows: the summary of the conversation running in that
+  directory and runtime now, else the most recent one. The filter matches
+  it too, so typing a topic finds the session. Titles (and conversation
+  previews) drop the markup harnesses wrap around pasted text or commands.
+
+- `A` in the Hub now shows or hides the whole footer painting (sky, sea and
+  boat) instead of anchoring the boat. It starts hidden, so the list gets
+  every row and the animation clock stays idle; the choice is saved. When
+  shown, the boat always sails.
+- An unpredictable sea: the swell is a long wave whose length breathes,
+  a cross swell, smooth noise and, now and then, a choppy group of short
+  waves that rises somewhere at random, drifts and fades. Everything is
+  continuous in time and seeded per run, so the sequence never repeats
+  and each session's sea is its own. Levels of the wave ramp vary their
+  shape from one stretch of sea to another (`~ ∼ -`, `‿ _`).
+- Sea life: very rarely an octopus (`ᗣ∿∿`, tentacles pulsing) or a squid
+  (`◁≋`) swims slowly across under the surface, muted by the water, under
+  the boat and its wake. When, which and which way come from the run's
+  seed. `ATLAS_SEA_LIFE=often` sends one every minute, to see it.
+- The status note of `A` clears itself after 2.5 s.
+- Light waves: each sea column's glyph follows the water's height
+  (`_ ‿ ~ ⁀ ˜`, or `_ - ~ ~ ^` with portable glyphs), so wave shapes drift
+  slowly along the sea, about two columns a second, under the colour
+  gradient. Stars use a finer range of weights (`· ∙ ˖ ˚ ⋆ ✧ ✦`).
+- A softer Hub KPI strip: no bold, numbers in plain text, muted labels,
+  quiet wider separators, and a space between each icon and its number.
+
 ## [0.7.0] - 2026-09-23
+
+Tagged on GitHub only; its changes reach npm in 0.8.0.
 
 - The boat sails again by default (`A` anchors it, and the choice is kept),
   and calmer: one column every 400 ms, about 25 s across the strip. The

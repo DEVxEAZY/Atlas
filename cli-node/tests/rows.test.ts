@@ -182,3 +182,42 @@ describe("rows", () => {
     expect(firstItemIndex([{ t: "header", label: "x" }])).toBeNull();
   });
 });
+
+describe("session titles", () => {
+  const convo = (over: Partial<import("../src/native/types").NativeSession>) => ({
+    harness: "claude" as const,
+    id: "x",
+    dir: "/p",
+    preview: "t",
+    updatedAt: 0,
+    file: "",
+    ...over,
+  });
+
+  test("a session shows its latest conversation, or the one running now", async () => {
+    const { sessionTitles } = await import("../src/screens/Hub");
+    const convos = [
+      convo({ id: "old", preview: "old topic", updatedAt: 1 }),
+      convo({ id: "new", preview: "new topic", updatedAt: 5 }),
+      convo({ id: "cx", harness: "codex", preview: "codex topic", updatedAt: 3 }),
+      convo({ id: "none", dir: "/q", preview: null, updatedAt: 9 }),
+    ];
+    const t = sessionTitles(convos, new Set());
+    expect(t.get("/p\0claude")).toBe("new topic");
+    expect(t.get("/p\0codex")).toBe("codex topic");
+    expect(t.has("/q\0claude")).toBe(false);
+    expect(sessionTitles(convos, new Set(["old"])).get("/p\0claude")).toBe("old topic"); // the live one wins
+  });
+
+  test("titles read like conversation previews and can be searched", async () => {
+    const { titleText } = await import("../src/screens/Hub");
+    expect(titleText("  fix the\nlogin   bug ")).toBe("  “fix the login bug”");
+    expect(titleText(null)).toBe("");
+    expect(titleText('precisamos corrigir: " <pasted_content id="0138"')).toBe("  “precisamos corrigir”");
+    expect(titleText("<command-name>/review</command-name> o PR")).toBe("  “/review o PR”");
+    expect(titleText("x".repeat(80))).toBe(`  “${"x".repeat(48)}”`);
+    const s = { dir: "/p", runtime: "claude", last_used: "", uses: 1 };
+    expect(matchSession(s, "login bug", "fix the login bug")).toBe(true);
+    expect(matchSession(s, "login bug")).toBe(false);
+  });
+});

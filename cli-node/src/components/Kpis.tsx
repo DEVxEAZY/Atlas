@@ -27,42 +27,43 @@ export interface KpiInput {
 
 const RUNTIMES = ["claude", "codex", "muse", "shell"];
 
+/** Quiet styling: a coloured icon, the number in plain text, the label
+ *  muted. Nothing bold, so the strip reads softly next to the list. */
+const icon = (text: string, color: string): KpiPart => ({ text: `${text} `, color });
+const num = (n: number, color: string = theme.text): KpiPart => ({ text: String(n), color });
+const label = (text: string, color: string = theme.dim): KpiPart => ({ text: ` ${text}`, color });
+
 /** KPIs in priority order: each one is dropped before those before it. */
 export function hubKpis(k: KpiInput): Kpi[] {
   const out: Kpi[] = [];
   const now = Object.values(k.live).reduce((a, b) => a + b, 0);
-  out.push(
-    now > 0
-      ? [{ text: `${G.live} `, color: theme.live }, { text: String(now), color: theme.live, bold: true }, { text: " agora", dim: true }]
-      : [{ text: `${G.idle} nada rodando`, dim: true }],
-  );
+  out.push(now > 0 ? [icon(G.live, theme.live), num(now), label("agora")] : [{ text: `${G.idle} nada rodando`, color: theme.dim }]);
   const byRuntime = RUNTIMES.filter((r) => (k.live[r] ?? 0) > 0);
   if (byRuntime.length > 0) {
     const kpi: Kpi = [];
     byRuntime.forEach((r, i) => {
-      if (i > 0) kpi.push({ text: " " });
-      kpi.push({ text: RUNTIME_ICON[r] ?? G.bullet, color: RUNTIME_COLOR[r] }, { text: String(k.live[r]), bold: true });
+      if (i > 0) kpi.push({ text: "  " });
+      kpi.push(icon(RUNTIME_ICON[r] ?? G.bullet, RUNTIME_COLOR[r] ?? theme.dim), num(k.live[r]));
     });
     out.push(kpi);
   }
-  if (k.tmux > 0)
-    out.push([{ text: `${TMUX_MARK} `, color: theme.peach }, { text: String(k.tmux), bold: true }, { text: " tmux", dim: true }]);
+  if (k.tmux > 0) out.push([icon(TMUX_MARK, theme.peach), num(k.tmux), label("tmux")]);
   if (k.cron.pending > 0)
-    out.push([{ text: `${G.clock} `, color: theme.amber }, { text: String(k.cron.pending), color: theme.amber, bold: true }, { text: " aguardando", color: theme.amber }]);
+    out.push([icon(G.clock, theme.amber), num(k.cron.pending, theme.amber), label("aguardando", theme.amber)]);
   if (k.cron.active > 0) {
     const kpi: Kpi = [
-      { text: `${G.clock} `, color: theme.seaCrest },
-      { text: String(k.cron.active), bold: true },
-      { text: k.cron.active === 1 ? " agendada" : " agendadas", dim: true },
+      icon(G.clock, theme.seaCrest),
+      num(k.cron.active),
+      label(k.cron.active === 1 ? "agendada" : "agendadas"),
     ];
-    if (k.cron.next) kpi.push({ text: ` · próx. ${k.cron.next}`, dim: true });
+    if (k.cron.next) kpi.push(label(`· próx. ${k.cron.next}`));
     out.push(kpi);
   }
-  out.push([{ text: String(k.sessions), bold: true }, { text: k.sessions === 1 ? " sessão" : " sessões", dim: true }]);
+  out.push([num(k.sessions), label(k.sessions === 1 ? "sessão" : "sessões")]);
   return out;
 }
 
-const SEP = " · ";
+const SEP = "  ·  ";
 const width = (kpi: Kpi) => kpi.reduce((n, p) => n + [...p.text].length, 0);
 
 /** The leading KPIs that fit `max` columns, joined by SEP. */
@@ -78,7 +79,7 @@ export function packKpis(kpis: Kpi[], max: number): Kpi[] {
   return out;
 }
 
-const PREFIX = "Atlas — ";
+const PREFIX = "Atlas   ";
 
 export default function KpiTitle({ kpis, columns }: { kpis: Kpi[]; columns: number }) {
   // root padding takes 4 columns
@@ -89,10 +90,10 @@ export default function KpiTitle({ kpis, columns }: { kpis: Kpi[]; columns: numb
         <Text color={theme.secondary} bold>
           Atlas
         </Text>
-        <Text dimColor> — </Text>
+        <Text>{"   "}</Text>
         {shown.map((kpi, i) => (
           <Text key={i}>
-            {i > 0 && <Text dimColor>{SEP}</Text>}
+            {i > 0 && <Text color={theme.hush}>{SEP}</Text>}
             {kpi.map((p, j) => (
               <Text key={j} color={p.color ?? theme.text} bold={p.bold} dimColor={p.dim}>
                 {p.text}

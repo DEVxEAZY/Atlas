@@ -31,6 +31,15 @@ export interface Glyphs {
   /** Star glyphs by weight: most are dust, the last ones are bright points
    *  (the last one always shines). */
   stars: string[];
+  /** Water by height, trough to crest: the glyph under each column follows
+   *  the swell, so the wave's shape travels along the sea. A level of
+   *  several characters varies its shape from one stretch of sea to
+   *  another (one column each). */
+  sea: string[];
+  /** Sea life seen under the water now and then, head first when swimming
+   *  left: an octopus with wiggling tentacles (two frames) and a squid. */
+  octopus: [string, string];
+  squid: string;
   /** The boat and whatever rides with it, left to right, one column each:
    *  a cell may carry a zero-width combining mark on a space. */
   ship: Array<{ ch: string; tone: "gull" | "wave" | "boat" }>;
@@ -59,7 +68,10 @@ export const RICH: Glyphs = {
   clock: "◷",
   spinner: ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
   moon: "☾",
-  stars: ["·", "·", "·", "˚", "⋆", "✦"],
+  stars: ["·", "·", "∙", "˖", "˚", "⋆", "✧", "✦"],
+  sea: ["_", "‿_", "~∼-", "⁀", "˜"],
+  octopus: ["ᗣ∿∿", "ᗣ~∿"],
+  squid: "◁≋",
   // gull (U+0F7C, a combining mark riding a space), wave, sailboat, wave
   ship: [
     { ch: " ོ", tone: "gull" },
@@ -90,6 +102,9 @@ export const SAFE: Glyphs = {
   spinner: ["-", "\\", "|", "/"],
   moon: "●",
   stars: ["·", "·", ".", "°", "+", "*"],
+  sea: ["_", "_-", "~-", "~", "^"],
+  octopus: ["@~~", "@-~"],
+  squid: "<=",
   // gull, then a hull with its mast between two waves: v ~\_|_/~
   ship: [
     { ch: "v", tone: "gull" },
